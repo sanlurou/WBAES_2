@@ -1,0 +1,639 @@
+        -:    0:Source:/workspace/Improved-Masking-for-White-box-AES/src/wbaes.c
+        -:    1:#include "wbaes.h"
+        -:    2:
+        -:    3:// 全局查找表定义
+        -:    4:u32 TypeII_MO_R1[16][256];
+        -:    5:u32 TypeII_MO_R1_Mask[16][256];
+        -:    6:u32 TypeII_MO_R8[16][256];
+        -:    7:u32 TypeII_MO_R8_Mask[16][256];
+        -:    8:u32 TypeII_MIMO_R2[16][256][256];
+        -:    9:u32 TypeII_MIMO_R2_Mask[16][256][256];
+        -:   10:u32 TypeII_MIMO_R9[16][256][256];
+        -:   11:u32 TypeII_MIMO_R9_Mask[16][256][256];
+        -:   12:u8 TypeV_MI[16][256][256];
+        -:   13:u32 TypeII[5][16][256];//R3 - R7 Type II
+        -:   14:u32 TypeIII[9][16][256];//R1 - R9 Type III
+        -:   15:u8 TypeIV_II[9][4][3][8][16][16]; 
+        -:   16:u8 TypeIV_III[9][4][3][8][16][16];
+        -:   17:u8 TypeIV_IIM_R1[4][3][8][16][16];
+        -:   18:u8 TypeIV_IIM_R8[4][3][8][16][16];
+        -:   19:u8 TypeIV_IIM_R9[4][3][8][16][16];
+        -:   20:u8 TypeIV_IIM_R2[4][4][8][16][16];
+        -:   21:
+        6:   22:void printstate(unsigned char * in)
+        -:   23:{
+      102:   24:    for(int i = 0; i < 16; i++)
+        -:   25:    {
+       96:   26:        printf("%.2X", in[i]);
+        -:   27:    }
+        6:   28:    printf("\n");
+        6:   29:    return ;
+        -:   30:}
+        -:   31:
+      286:   32:void wbaes_gen(u8 key[16])
+        -:   33:{
+        -:   34:    u8 expandedKey[176];
+        -:   35:    M8 L[9][16];
+        -:   36:    M8 L_inv[9][16];
+        -:   37:    M8 MaskMat_R1[16];
+        -:   38:    M8 MaskMat_R1_inv[16];
+        -:   39:    M8 MaskMat_R8[16];
+        -:   40:    M8 MaskMat_R8_inv[16];
+        -:   41:    M8 MaskMat_R9[16];
+        -:   42:    M8 MaskMat_R9_inv[16];
+        -:   43:    M32 MB[9][4];
+        -:   44:    M32 MB_inv[9][4];
+        -:   45:    u32 Tyi[4][256];
+        -:   46:    M32 Out_L[9][4];
+        -:   47:    M32 Out_Mask_R1[4];
+        -:   48:    M32 Out_Mask_R8[4];
+        -:   49:    M32 Out_Mask_R9[4];
+        -:   50:    u8 temp_u8;
+        -:   51:    u32 temp_u32;
+        -:   52:    u32 temp_mask;
+        -:   53:    u8 temp_u8_left;
+        -:   54:    u8 temp_u8_right;
+        -:   55:    int i, j, x, k, r, y;
+        -:   56:    static u8 nibble[16] = {0x01, 0x02, 0x0C, 0x05, 0x07, 0x08, 0x0A, 0x0F, 0x04, 0x0D, 0x0B, 0x0E, 0x09, 0x06, 0x00, 0x03};
+        -:   57:    static u8 nibble_inv[16] = {0x0e, 0x00, 0x01, 0x0f, 0x08, 0x03, 0x0d, 0x04, 0x05, 0x0c, 0x06, 0x0a, 0x02, 0x09, 0x0b, 0x07}; 
+      286:   58:    int columnindex[]={0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3};
+      286:   59:    int shiftindex[]={0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11};
+      286:   60:    int shiftbit[]={24, 16, 8, 0};
+        -:   61:
+      286:   62:    expandKey (key, expandedKey);
+        -:   63:
+     2860:   64:    for(i = 0; i < 9; i++)
+        -:   65:    {
+    43758:   66:        for(j = 0; j < 16; j++)
+        -:   67:        {
+    41184:   68:            genMatpairM8(&L[i][j], &L_inv[i][j]);
+        -:   69:        }
+        -:   70:    }
+        -:   71:
+     4862:   72:    for(j = 0; j < 16; j++)
+        -:   73:    {
+     4576:   74:        genMatpairM8(&MaskMat_R1[j], &MaskMat_R1_inv[j]);
+     4576:   75:        genMatpairM8(&MaskMat_R8[j], &MaskMat_R8_inv[j]);
+     4576:   76:        genMatpairM8(&MaskMat_R9[j], &MaskMat_R9_inv[j]);
+        -:   77:    }
+     2860:   78:    for(i = 0; i < 9; i++)
+        -:   79:    {
+    12870:   80:        for(j = 0; j < 4; j++)
+        -:   81:        {
+    10296:   82:            genMatpairM32(&MB[i][j], &MB_inv[i][j]);
+        -:   83:        }
+        -:   84:    }
+        -:   85:
+    73502:   86:    for (x = 0; x < 256; x++)
+        -:   87:    {
+    73216:   88:      Tyi[0][x] = (gMul(2, x) << 24) | (x << 16) | (x << 8) | gMul(3, x);
+    73216:   89:      Tyi[1][x] = (gMul(3, x) << 24) | (gMul(2, x) << 16) | (x << 8) | x;
+    73216:   90:      Tyi[2][x] = (x << 24) | (gMul(3, x) << 16) | (gMul(2, x) << 8) | x;
+    73216:   91:      Tyi[3][x] = (x << 24) | (x << 16) | (gMul(3, x) << 8) | gMul(2, x);
+        -:   92:    }
+        -:   93:
+     2860:   94:    for(i = 0; i < 9; i++)
+        -:   95:    {
+    12870:   96:        for(j = 0; j < 4; j++)
+        -:   97:        {
+    10296:   98:            MatrixcomM8to32(L[i][4 * j], L[i][4 * j + 1], L[i][4 * j + 2], L[i][4 * j + 3], &Out_L[i][j]);
+        -:   99:        }
+        -:  100:    }
+        -:  101:    
+     1430:  102:    for(j = 0; j < 4; j++)
+        -:  103:    {
+     1144:  104:        MatrixcomM8to32(MaskMat_R1[4 * j], MaskMat_R1[4 * j + 1], MaskMat_R1[4 * j + 2], MaskMat_R1[4 * j + 3], &Out_Mask_R1[j]);
+     1144:  105:        MatrixcomM8to32(MaskMat_R8[4 * j], MaskMat_R8[4 * j + 1], MaskMat_R8[4 * j + 2], MaskMat_R8[4 * j + 3], &Out_Mask_R8[j]);
+     1144:  106:        MatrixcomM8to32(MaskMat_R9[4 * j], MaskMat_R9[4 * j + 1], MaskMat_R9[4 * j + 2], MaskMat_R9[4 * j + 3], &Out_Mask_R9[j]);
+        -:  107:    }
+        -:  108:    
+        -:  109:    //Round 1
+      286:  110:    shiftRows (expandedKey + 16 * 0);
+      286:  111:    InitRandom(((unsigned int)time(NULL)));
+     4862:  112:    for(j = 0; j < 16; j++)//type_II
+        -:  113:    {
+  1176032:  114:        for(x = 0; x < 256; x++)
+        -:  115:        {
+  1171456:  116:            temp_u8 = SBox[x ^ expandedKey[16 * 0 + j]];
+  1171456:  117:            temp_u32 = Tyi[j % 4][temp_u8];
+  1171456:  118:            temp_mask = cus_random();
+  1171456:  119:            temp_u32 ^= temp_mask;
+  1171456:  120:            temp_u32 = MatMulNumM32(MB[0][columnindex[j]], temp_u32);
+  1171456:  121:            TypeII_MO_R1[j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  122:        
+        -:  123:            //mask table
+  1171456:  124:            temp_u32 = MatMulNumM32(Out_Mask_R1[columnindex[j]], temp_mask);
+  1171456:  125:            TypeII_MO_R1_Mask[j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  126:        }
+        -:  127:    }
+     4862:  128:    for(j = 0; j < 16; j++)//type_III
+        -:  129:    {
+  1176032:  130:        for(x = 0; x < 256; x++)
+        -:  131:        {
+  1171456:  132:            temp_u8 = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]); 
+  1171456:  133:            temp_u32 = temp_u8;
+  1171456:  134:            temp_u32 = temp_u32 << shiftbit[j % 4];
+  1171456:  135:            temp_u32 = MatMulNumM32(MB_inv[0][columnindex[j]], temp_u32);
+  1171456:  136:            temp_u32 = MatMulNumM32(Out_L[0][columnindex[j]], temp_u32);
+  1171456:  137:            TypeIII[0][j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  138:        }
+        -:  139:    }
+        -:  140:
+        -:  141:    //Round 2
+      286:  142:    shiftRows (expandedKey + 16 * 1);
+     4862:  143:    for(j = 0; j < 16; j++)
+        -:  144:    {
+  1176032:  145:        for(x = 0; x < 256; x++)
+        -:  146:        {
+301064192:  147:            for(y = 0; y < 256; y++)
+        -:  148:            {
+299892736:  149:                temp_u8_left = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+299892736:  150:                temp_u8_right = (nibble_inv[(y & 0xf0) >> 4] << 4) | (nibble_inv[(y & 0x0f)]);
+        -:  151:                
+299892736:  152:                temp_u8_left = MatMulNumM8(L_inv[0][shiftindex[j]], temp_u8_left);
+299892736:  153:                temp_u8_right = MatMulNumM8(MaskMat_R1_inv[shiftindex[j]], temp_u8_right);
+299892736:  154:                temp_u8 = temp_u8_left ^ temp_u8_right;
+299892736:  155:                temp_u8 = SBox[temp_u8 ^ expandedKey[16 * 1 + j]];
+299892736:  156:                temp_u32 = Tyi[j % 4][temp_u8];
+299892736:  157:                temp_mask = cus_random();
+299892736:  158:                temp_u32 ^= temp_mask;
+299892736:  159:                temp_u32 = MatMulNumM32(MB[1][columnindex[j]], temp_u32);
+299892736:  160:                TypeII_MIMO_R2[j][x][y] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  161:
+        -:  162:                //mask table
+299892736:  163:                temp_u32 = MatMulNumM32(MB[1][columnindex[j]], temp_mask);
+299892736:  164:                TypeII_MIMO_R2_Mask[j][x][y] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  165:            }
+        -:  166:        }
+        -:  167:    }
+     4862:  168:    for(j = 0; j < 16; j++)//type_III
+        -:  169:    {
+  1176032:  170:        for(x = 0; x < 256; x++)
+        -:  171:        {
+  1171456:  172:            temp_u8 = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+  1171456:  173:            temp_u32 = temp_u8;
+  1171456:  174:            temp_u32 = temp_u32 << shiftbit[j % 4];
+  1171456:  175:            temp_u32 = MatMulNumM32(MB_inv[1][columnindex[j]], temp_u32);
+  1171456:  176:            temp_u32 = MatMulNumM32(Out_L[1][columnindex[j]], temp_u32);
+  1171456:  177:            TypeIII[1][j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  178:        }
+        -:  179:    }
+        -:  180:
+        -:  181:    //Round 3 - 7
+     1716:  182:    for (i = 2; i < 7; i++)//Type_II
+        -:  183:    {
+     1430:  184:        shiftRows (expandedKey + 16 * i);
+    24310:  185:        for(j = 0; j < 16; j++)
+        -:  186:        {
+  5880160:  187:            for(x = 0; x < 256; x++)
+        -:  188:            {
+  5857280:  189:                temp_u8 = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+  5857280:  190:                temp_u8 = MatMulNumM8(L_inv[i - 1][shiftindex[j]], temp_u8);
+  5857280:  191:                temp_u8 = SBox[temp_u8 ^ expandedKey[16 * i + j]];
+  5857280:  192:                temp_u32 = Tyi[j % 4][temp_u8];
+  5857280:  193:                temp_u32 = MatMulNumM32(MB[i][columnindex[j]], temp_u32);
+  5857280:  194:                TypeII[i - 2][j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  195:            }
+        -:  196:        }
+        -:  197:    
+    24310:  198:        for(j = 0; j < 16; j++)//type_III
+        -:  199:        {
+  5880160:  200:            for(x = 0; x < 256; x++)
+        -:  201:            {
+  5857280:  202:                temp_u8 = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+  5857280:  203:                temp_u32 = temp_u8;
+  5857280:  204:                temp_u32 = temp_u32 << shiftbit[j % 4];
+  5857280:  205:                temp_u32 = MatMulNumM32(MB_inv[i][columnindex[j]], temp_u32);
+  5857280:  206:                temp_u32 = MatMulNumM32(Out_L[i][columnindex[j]], temp_u32);
+  5857280:  207:                TypeIII[i][j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  208:            }
+        -:  209:        }
+        -:  210:    }
+        -:  211:
+        -:  212:    //Round 8
+      286:  213:    shiftRows (expandedKey + 16 * 7);
+     4862:  214:    for(j = 0; j < 16; j++)
+        -:  215:    {
+  1176032:  216:        for(x = 0; x < 256; x++)
+        -:  217:        {
+  1171456:  218:            temp_u8 = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+  1171456:  219:            temp_u8 = MatMulNumM8(L_inv[6][shiftindex[j]], temp_u8);
+  1171456:  220:            temp_u8 = SBox[temp_u8 ^ expandedKey[16 * 7 + j]];
+  1171456:  221:            temp_u32 = Tyi[j % 4][temp_u8];
+  1171456:  222:            temp_mask = cus_random();
+  1171456:  223:            temp_u32 ^= temp_mask;
+  1171456:  224:            temp_u32 = MatMulNumM32(MB[7][columnindex[j]], temp_u32);
+  1171456:  225:            TypeII_MO_R8[j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  226:        
+        -:  227:            //mask table
+  1171456:  228:            temp_u32 = MatMulNumM32(Out_Mask_R8[columnindex[j]], temp_mask);
+  1171456:  229:            TypeII_MO_R8_Mask[j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  230:        }
+        -:  231:    }
+     4862:  232:    for(j = 0; j < 16; j++)//type_III
+        -:  233:    {
+  1176032:  234:        for(x = 0; x < 256; x++)
+        -:  235:        {
+  1171456:  236:            temp_u8 = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]); 
+  1171456:  237:            temp_u32 = temp_u8;
+  1171456:  238:            temp_u32 = temp_u32 << shiftbit[j % 4];
+  1171456:  239:            temp_u32 = MatMulNumM32(MB_inv[7][columnindex[j]], temp_u32);
+  1171456:  240:            temp_u32 = MatMulNumM32(Out_L[7][columnindex[j]], temp_u32);
+  1171456:  241:            TypeIII[7][j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  242:        }
+        -:  243:    }
+        -:  244:
+        -:  245:    //Round 9
+      286:  246:    shiftRows (expandedKey + 16 * 8);
+     4862:  247:    for(j = 0; j < 16; j++)
+        -:  248:    {
+  1176032:  249:        for(x = 0; x < 256; x++)
+        -:  250:        {
+301064192:  251:            for(y = 0; y < 256; y++)
+        -:  252:            {
+299892736:  253:                temp_u8_left = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+299892736:  254:                temp_u8_right = (nibble_inv[(y & 0xf0) >> 4] << 4) | (nibble_inv[(y & 0x0f)]);
+        -:  255:                
+299892736:  256:                temp_u8_left = MatMulNumM8(L_inv[7][shiftindex[j]], temp_u8_left);
+299892736:  257:                temp_u8_right = MatMulNumM8(MaskMat_R8_inv[shiftindex[j]], temp_u8_right);
+299892736:  258:                temp_u8 = temp_u8_left ^ temp_u8_right;
+299892736:  259:                temp_u8 = SBox[temp_u8 ^ expandedKey[16 * 8 + j]];
+299892736:  260:                temp_u32 = Tyi[j % 4][temp_u8];
+299892736:  261:                temp_mask = cus_random();
+299892736:  262:                temp_u32 ^= temp_mask;
+299892736:  263:                temp_u32 = MatMulNumM32(MB[8][columnindex[j]], temp_u32);
+299892736:  264:                TypeII_MIMO_R9[j][x][y] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  265:
+        -:  266:                //mask table
+299892736:  267:                temp_u32 = MatMulNumM32(Out_Mask_R9[columnindex[j]], temp_mask);
+299892736:  268:                TypeII_MIMO_R9_Mask[j][x][y] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  269:            }
+        -:  270:        }
+        -:  271:    }
+     4862:  272:    for(j = 0; j < 16; j++)//type_III
+        -:  273:    {
+  1176032:  274:        for(x = 0; x < 256; x++)
+        -:  275:        {
+  1171456:  276:            temp_u8 = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+  1171456:  277:            temp_u32 = temp_u8;
+  1171456:  278:            temp_u32 = temp_u32 << shiftbit[j % 4];
+  1171456:  279:            temp_u32 = MatMulNumM32(MB_inv[8][columnindex[j]], temp_u32);
+  1171456:  280:            temp_u32 = MatMulNumM32(Out_L[8][columnindex[j]], temp_u32);
+  1171456:  281:            TypeIII[8][j][x] = (nibble[(temp_u32 & 0xf0000000) >> 28] << 28) | (nibble[(temp_u32 & 0x0f000000) >> 24] << 24) | (nibble[(temp_u32 & 0x00f00000) >> 20] << 20) | (nibble[(temp_u32 & 0x000f0000) >> 16] << 16) | (nibble[(temp_u32 & 0x0000f000) >> 12] << 12) | (nibble[(temp_u32 & 0x00000f00) >> 8] << 8) | (nibble[(temp_u32 & 0x000000f0) >> 4] << 4) | (nibble[(temp_u32 & 0x0000000f)]);
+        -:  282:        }
+        -:  283:    }
+        -:  284:
+        -:  285:    //Round 10
+      286:  286:    shiftRows (expandedKey + 16 * 9);
+     4862:  287:    for(j = 0; j < 16; j++)//type_II
+        -:  288:    {
+  1176032:  289:        for(x = 0; x < 256; x++)
+        -:  290:        {
+301064192:  291:            for(y = 0; y < 256; y++)
+        -:  292:            {
+299892736:  293:                temp_u8_left = (nibble_inv[(x & 0xf0) >> 4] << 4) | (nibble_inv[(x & 0x0f)]);
+299892736:  294:                temp_u8_right = (nibble_inv[(y & 0xf0) >> 4] << 4) | (nibble_inv[(y & 0x0f)]);
+        -:  295:
+299892736:  296:                temp_u8_left = MatMulNumM8(L_inv[8][shiftindex[j]], temp_u8_left);
+299892736:  297:                temp_u8_right = MatMulNumM8(MaskMat_R9_inv[shiftindex[j]], temp_u8_right);
+299892736:  298:                temp_u8 = temp_u8_left ^ temp_u8_right;
+299892736:  299:                temp_u8 = SBox[temp_u8 ^ expandedKey[16 * 9 + j]];
+299892736:  300:                TypeV_MI[j][x][y] = temp_u8 ^ expandedKey[16 * 10 + j];
+        -:  301:            }
+        -:  302:        }
+        -:  303:    }
+        -:  304:
+     2860:  305:    for (i = 0; i < 9; i++)
+        -:  306:    {
+    12870:  307:        for (j = 0; j < 4; j++)
+        -:  308:        {
+    41184:  309:            for(k = 0; k < 3; k++)
+        -:  310:            {
+   277992:  311:                for(r = 0; r < 8; r++)
+        -:  312:                {
+  4200768:  313:                    for (x = 0; x < 16; x++)
+        -:  314:                    {
+ 67212288:  315:                        for (y = 0; y < 16; y++)
+        -:  316:                        {
+ 63258624:  317:                            TypeIV_II[i][j][k][r][x][y] = nibble[nibble_inv[x] ^ nibble_inv[y]];
+ 63258624:  318:                            TypeIV_III[i][j][k][r][x][y] = nibble[nibble_inv[x] ^ nibble_inv[y]];
+        -:  319:                        }
+        -:  320:                    }
+        -:  321:                }
+        -:  322:            }
+        -:  323:        }
+        -:  324:    }
+     1430:  325:    for (i = 0; i < 4; i++)
+        -:  326:    {
+     4576:  327:        for (j = 0; j < 3; j++)
+        -:  328:        {
+    30888:  329:            for (k = 0; k < 8; k++)
+        -:  330:            {
+   466752:  331:                for (x = 0; x < 16; x++)
+        -:  332:                {
+  7468032:  333:                    for (y = 0; y < 16; y++)
+        -:  334:                    {
+  7028736:  335:                        TypeIV_IIM_R1[i][j][k][x][y] = nibble[nibble_inv[x] ^ nibble_inv[y]];
+  7028736:  336:                        TypeIV_IIM_R8[i][j][k][x][y] = nibble[nibble_inv[x] ^ nibble_inv[y]];
+  7028736:  337:                        TypeIV_IIM_R9[i][j][k][x][y] = nibble[nibble_inv[x] ^ nibble_inv[y]];
+        -:  338:                    }
+        -:  339:                }
+        -:  340:            }
+        -:  341:        }
+        -:  342:    }
+     1430:  343:    for (i = 0; i < 4; i++)
+        -:  344:    {
+     5720:  345:        for (j = 0; j < 4; j++)
+        -:  346:        {
+    41184:  347:            for (k = 0; k < 8; k++)
+        -:  348:            {
+   622336:  349:                for (x = 0; x < 16; x++)
+        -:  350:                {
+  9957376:  351:                    for (y = 0; y < 16; y++)
+        -:  352:                    {
+  9371648:  353:                        TypeIV_IIM_R2[i][j][k][x][y] = nibble[nibble_inv[x] ^ nibble_inv[y]];
+        -:  354:                    }
+        -:  355:                }
+        -:  356:            }
+        -:  357:        }
+        -:  358:    }
+      286:  359:}
+        -:  360:
+     2468:  361:void wbaes_encrypt(u8 input[16], u8 output[16])
+        -:  362:{
+        -:  363:    u32 a, b, c, d, ab, cd, aa, bb, cc, dd;
+        -:  364:    u8 state[16];
+        -:  365:    u8 mask[16];
+        -:  366:    int i, j;
+        -:  367:
+    41956:  368:    for(i = 0; i < 16; i++)
+        -:  369:    {
+    39488:  370:        state[i] = input[i];
+        -:  371:    }
+        -:  372:    // Round 1
+     2468:  373:    shiftRows (state);
+    12340:  374:    for (j = 0; j < 4; j++)
+        -:  375:    {
+     9872:  376:        a = TypeII_MO_R1[4*j + 0][state[4*j + 0]];
+     9872:  377:        b = TypeII_MO_R1[4*j + 1][state[4*j + 1]];
+     9872:  378:        c = TypeII_MO_R1[4*j + 2][state[4*j + 2]];
+     9872:  379:        d = TypeII_MO_R1[4*j + 3][state[4*j + 3]];
+        -:  380:
+     9872:  381:        aa = TypeII_MO_R1_Mask[4*j + 0][state[4*j + 0]];
+     9872:  382:        bb = TypeII_MO_R1_Mask[4*j + 1][state[4*j + 1]];
+     9872:  383:        cc = TypeII_MO_R1_Mask[4*j + 2][state[4*j + 2]];
+     9872:  384:        dd = TypeII_MO_R1_Mask[4*j + 3][state[4*j + 3]];
+        -:  385:        // 
+     9872:  386:        ab = (TypeIV_II[0][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_II[0][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_II[0][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) | (TypeIV_II[0][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  387:        (TypeIV_II[0][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_II[0][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_II[0][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_II[0][j][0][7][a & 0xf][b & 0xf];
+        -:  388:        
+     9872:  389:        cd = (TypeIV_II[0][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_II[0][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_II[0][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) | (TypeIV_II[0][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  390:        (TypeIV_II[0][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_II[0][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_II[0][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_II[0][j][1][7][c & 0xf][d & 0xf];
+        -:  391:        
+     9872:  392:        state[4*j + 0] = (TypeIV_II[0][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_II[0][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  393:        state[4*j + 1] = (TypeIV_II[0][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_II[0][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  394:        state[4*j + 2] = (TypeIV_II[0][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_II[0][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  395:        state[4*j + 3] = (TypeIV_II[0][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_II[0][j][2][7][ab & 0xf][cd & 0xf];
+        -:  396:        // 
+     9872:  397:        ab = (TypeIV_IIM_R1[j][0][0][(aa >> 28) & 0xf][(bb >> 28) & 0xf] << 28) | (TypeIV_IIM_R1[j][0][1][(aa >> 24) & 0xf][(bb >> 24) & 0xf] << 24) | (TypeIV_IIM_R1[j][0][2][(aa >> 20) & 0xf][(bb >> 20) & 0xf] << 20) | (TypeIV_IIM_R1[j][0][3][(aa >> 16) & 0xf][(bb >> 16) & 0xf] << 16) |\
+     9872:  398:        (TypeIV_IIM_R1[j][0][4][(aa >> 12) & 0xf][(bb >> 12) & 0xf] << 12) | (TypeIV_IIM_R1[j][0][5][(aa >> 8) & 0xf][(bb >> 8) & 0xf] << 8) | (TypeIV_IIM_R1[j][0][6][(aa >> 4) & 0xf][(bb >> 4) & 0xf] << 4) | TypeIV_IIM_R1[j][0][7][aa & 0xf][bb & 0xf];
+        -:  399:        
+     9872:  400:        cd = (TypeIV_IIM_R1[j][1][0][(cc >> 28) & 0xf][(dd >> 28) & 0xf] << 28) | (TypeIV_IIM_R1[j][1][1][(cc >> 24) & 0xf][(dd >> 24) & 0xf] << 24) | (TypeIV_IIM_R1[j][1][2][(cc >> 20) & 0xf][(dd >> 20) & 0xf] << 20) | (TypeIV_IIM_R1[j][1][3][(cc >> 16) & 0xf][(dd >> 16) & 0xf] << 16) |\
+     9872:  401:        (TypeIV_IIM_R1[j][1][4][(cc >> 12) & 0xf][(dd >> 12) & 0xf] << 12) | (TypeIV_IIM_R1[j][1][5][(cc >> 8) & 0xf][(dd >> 8) & 0xf] << 8) | (TypeIV_IIM_R1[j][1][6][(cc >> 4) & 0xf][(dd >> 4) & 0xf] << 4) | TypeIV_IIM_R1[j][1][7][cc & 0xf][dd & 0xf];
+        -:  402:        
+     9872:  403:        mask[4*j + 0] = (TypeIV_IIM_R1[j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_IIM_R1[j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  404:        mask[4*j + 1] = (TypeIV_IIM_R1[j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_IIM_R1[j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  405:        mask[4*j + 2] = (TypeIV_IIM_R1[j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_IIM_R1[j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  406:        mask[4*j + 3] = (TypeIV_IIM_R1[j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_IIM_R1[j][2][7][ab & 0xf][cd & 0xf];
+        -:  407:        // 
+     9872:  408:        a = TypeIII[0][4*j + 0][state[4*j + 0]];
+     9872:  409:        b = TypeIII[0][4*j + 1][state[4*j + 1]];
+     9872:  410:        c = TypeIII[0][4*j + 2][state[4*j + 2]];
+     9872:  411:        d = TypeIII[0][4*j + 3][state[4*j + 3]];
+        -:  412:
+     9872:  413:        ab = (TypeIV_III[0][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_III[0][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_III[0][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) | (TypeIV_III[0][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  414:        (TypeIV_III[0][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_III[0][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_III[0][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_III[0][j][0][7][a & 0xf][b & 0xf];
+        -:  415:        
+     9872:  416:        cd = (TypeIV_III[0][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_III[0][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_III[0][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) | (TypeIV_III[0][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  417:        (TypeIV_III[0][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_III[0][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_III[0][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_III[0][j][1][7][c & 0xf][d & 0xf];
+        -:  418:        
+     9872:  419:        state[4*j + 0] = (TypeIV_III[0][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_III[0][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  420:        state[4*j + 1] = (TypeIV_III[0][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_III[0][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  421:        state[4*j + 2] = (TypeIV_III[0][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_III[0][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  422:        state[4*j + 3] = (TypeIV_III[0][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_III[0][j][2][7][ab & 0xf][cd & 0xf];
+        -:  423:    }
+        -:  424:
+        -:  425:    // Round 2
+     2468:  426:    shiftRows (state);
+     2468:  427:    shiftRows (mask);
+    12340:  428:    for (j = 0; j < 4; j++)
+        -:  429:    {
+     9872:  430:        a = TypeII_MIMO_R2[4*j + 0][state[4*j + 0]][mask[4*j + 0]];
+     9872:  431:        b = TypeII_MIMO_R2[4*j + 1][state[4*j + 1]][mask[4*j + 1]];
+     9872:  432:        c = TypeII_MIMO_R2[4*j + 2][state[4*j + 2]][mask[4*j + 2]];
+     9872:  433:        d = TypeII_MIMO_R2[4*j + 3][state[4*j + 3]][mask[4*j + 3]];
+        -:  434:
+     9872:  435:        aa = TypeII_MIMO_R2_Mask[4*j + 0][state[4*j + 0]][mask[4*j + 0]];
+     9872:  436:        bb = TypeII_MIMO_R2_Mask[4*j + 1][state[4*j + 1]][mask[4*j + 1]];
+     9872:  437:        cc = TypeII_MIMO_R2_Mask[4*j + 2][state[4*j + 2]][mask[4*j + 2]];
+     9872:  438:        dd = TypeII_MIMO_R2_Mask[4*j + 3][state[4*j + 3]][mask[4*j + 3]];
+        -:  439:        // 
+     9872:  440:        ab = (TypeIV_II[1][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_II[1][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_II[1][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) | (TypeIV_II[1][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  441:        (TypeIV_II[1][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_II[1][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_II[1][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_II[1][j][0][7][a & 0xf][b & 0xf];
+        -:  442:        
+     9872:  443:        cd = (TypeIV_II[1][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_II[1][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_II[1][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) | (TypeIV_II[1][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  444:        (TypeIV_II[1][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_II[1][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_II[1][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_II[1][j][1][7][c & 0xf][d & 0xf];
+        -:  445:        
+     9872:  446:        state[4*j + 0] = (TypeIV_II[1][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_II[1][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  447:        state[4*j + 1] = (TypeIV_II[1][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_II[1][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  448:        state[4*j + 2] = (TypeIV_II[1][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_II[1][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  449:        state[4*j + 3] = (TypeIV_II[1][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_II[1][j][2][7][ab & 0xf][cd & 0xf];
+        -:  450:        // 
+     9872:  451:        ab = (TypeIV_IIM_R2[j][0][0][(aa >> 28) & 0xf][(bb >> 28) & 0xf] << 28) | (TypeIV_IIM_R2[j][0][1][(aa >> 24) & 0xf][(bb >> 24) & 0xf] << 24) | (TypeIV_IIM_R2[j][0][2][(aa >> 20) & 0xf][(bb >> 20) & 0xf] << 20) | (TypeIV_IIM_R2[j][0][3][(aa >> 16) & 0xf][(bb >> 16) & 0xf] << 16) |\
+     9872:  452:        (TypeIV_IIM_R2[j][0][4][(aa >> 12) & 0xf][(bb >> 12) & 0xf] << 12) | (TypeIV_IIM_R2[j][0][5][(aa >> 8) & 0xf][(bb >> 8) & 0xf] << 8) | (TypeIV_IIM_R2[j][0][6][(aa >> 4) & 0xf][(bb >> 4) & 0xf] << 4) | TypeIV_IIM_R2[j][0][7][aa & 0xf][bb & 0xf];
+        -:  453:        
+     9872:  454:        cd = (TypeIV_IIM_R2[j][1][0][(cc >> 28) & 0xf][(dd >> 28) & 0xf] << 28) | (TypeIV_IIM_R2[j][1][1][(cc >> 24) & 0xf][(dd >> 24) & 0xf] << 24) | (TypeIV_IIM_R2[j][1][2][(cc >> 20) & 0xf][(dd >> 20) & 0xf] << 20) | (TypeIV_IIM_R2[j][1][3][(cc >> 16) & 0xf][(dd >> 16) & 0xf] << 16) |\
+     9872:  455:        (TypeIV_IIM_R2[j][1][4][(cc >> 12) & 0xf][(dd >> 12) & 0xf] << 12) | (TypeIV_IIM_R2[j][1][5][(cc >> 8) & 0xf][(dd >> 8) & 0xf] << 8) | (TypeIV_IIM_R2[j][1][6][(cc >> 4) & 0xf][(dd >> 4) & 0xf] << 4) | TypeIV_IIM_R2[j][1][7][cc & 0xf][dd & 0xf];
+        -:  456:        
+     9872:  457:        mask[4*j + 0] = (TypeIV_IIM_R2[j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_IIM_R2[j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  458:        mask[4*j + 1] = (TypeIV_IIM_R2[j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_IIM_R2[j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  459:        mask[4*j + 2] = (TypeIV_IIM_R2[j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_IIM_R2[j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  460:        mask[4*j + 3] = (TypeIV_IIM_R2[j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_IIM_R2[j][2][7][ab & 0xf][cd & 0xf];
+        -:  461:
+     9872:  462:        state[4*j + 0] = (TypeIV_IIM_R2[j][3][0][(state[4*j + 0] >> 4) & 0xf][(mask[4*j + 0] >> 4) & 0xf] << 4) | TypeIV_IIM_R2[j][3][1][state[4*j + 0] & 0xf][mask[4*j + 0] & 0xf];
+     9872:  463:        state[4*j + 1] = (TypeIV_IIM_R2[j][3][2][(state[4*j + 1] >> 4) & 0xf][(mask[4*j + 1] >> 4) & 0xf] << 4) | TypeIV_IIM_R2[j][3][3][state[4*j + 1] & 0xf][mask[4*j + 1] & 0xf];
+     9872:  464:        state[4*j + 2] = (TypeIV_IIM_R2[j][3][4][(state[4*j + 2] >> 4) & 0xf][(mask[4*j + 2] >> 4) & 0xf] << 4) | TypeIV_IIM_R2[j][3][5][state[4*j + 2] & 0xf][mask[4*j + 2] & 0xf];
+     9872:  465:        state[4*j + 3] = (TypeIV_IIM_R2[j][3][6][(state[4*j + 3] >> 4) & 0xf][(mask[4*j + 3] >> 4) & 0xf] << 4) | TypeIV_IIM_R2[j][3][7][state[4*j + 3] & 0xf][mask[4*j + 3] & 0xf];
+        -:  466:
+     9872:  467:        a = TypeIII[1][4*j + 0][state[4*j + 0]];
+     9872:  468:        b = TypeIII[1][4*j + 1][state[4*j + 1]];
+     9872:  469:        c = TypeIII[1][4*j + 2][state[4*j + 2]];
+     9872:  470:        d = TypeIII[1][4*j + 3][state[4*j + 3]];
+        -:  471:
+     9872:  472:        ab = (TypeIV_III[1][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_III[1][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_III[1][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) |(TypeIV_III[1][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  473:        (TypeIV_III[1][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_III[1][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_III[1][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_III[1][j][0][7][a & 0xf][b & 0xf];
+        -:  474:        
+     9872:  475:        cd = (TypeIV_III[1][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_III[1][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_III[1][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) |(TypeIV_III[1][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  476:        (TypeIV_III[1][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_III[1][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_III[1][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_III[1][j][1][7][c & 0xf][d & 0xf];
+        -:  477:        
+     9872:  478:        state[4*j + 0] = (TypeIV_III[1][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_III[1][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  479:        state[4*j + 1] = (TypeIV_III[1][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_III[1][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  480:        state[4*j + 2] = (TypeIV_III[1][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_III[1][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  481:        state[4*j + 3] = (TypeIV_III[1][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_III[1][j][2][7][ab & 0xf][cd & 0xf];
+        -:  482:    }
+        -:  483:
+        -:  484:    // Round 3 - 7
+    14808:  485:    for (i = 2; i < 7; i++)
+        -:  486:    {
+    12340:  487:        shiftRows (state);
+    61700:  488:        for (j = 0; j < 4; j++)
+        -:  489:        {
+    49360:  490:            a = TypeII[i - 2][4*j + 0][state[4*j + 0]];
+    49360:  491:            b = TypeII[i - 2][4*j + 1][state[4*j + 1]];
+    49360:  492:            c = TypeII[i - 2][4*j + 2][state[4*j + 2]];
+    49360:  493:            d = TypeII[i - 2][4*j + 3][state[4*j + 3]];
+        -:  494:
+    49360:  495:            ab = (TypeIV_II[i][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_II[i][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_II[i][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) |(TypeIV_II[i][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+    49360:  496:            (TypeIV_II[i][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_II[i][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_II[i][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_II[i][j][0][7][a & 0xf][b & 0xf];
+        -:  497:            
+    49360:  498:            cd = (TypeIV_II[i][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_II[i][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_II[i][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) |(TypeIV_II[i][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+    49360:  499:            (TypeIV_II[i][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_II[i][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_II[i][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_II[i][j][1][7][c & 0xf][d & 0xf];
+        -:  500:            
+    49360:  501:            state[4*j + 0] = (TypeIV_II[i][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_II[i][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+    49360:  502:            state[4*j + 1] = (TypeIV_II[i][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_II[i][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+    49360:  503:            state[4*j + 2] = (TypeIV_II[i][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_II[i][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+    49360:  504:            state[4*j + 3] = (TypeIV_II[i][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_II[i][j][2][7][ab & 0xf][cd & 0xf];
+        -:  505:
+    49360:  506:            a = TypeIII[i][4*j + 0][state[4*j + 0]];
+    49360:  507:            b = TypeIII[i][4*j + 1][state[4*j + 1]];
+    49360:  508:            c = TypeIII[i][4*j + 2][state[4*j + 2]];
+    49360:  509:            d = TypeIII[i][4*j + 3][state[4*j + 3]];
+        -:  510:
+    49360:  511:            ab = (TypeIV_III[i][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_III[i][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_III[i][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) |(TypeIV_III[i][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+    49360:  512:            (TypeIV_III[i][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_III[i][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_III[i][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_III[i][j][0][7][a & 0xf][b & 0xf];
+        -:  513:            
+    49360:  514:            cd = (TypeIV_III[i][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_III[i][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_III[i][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) |(TypeIV_III[i][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+    49360:  515:            (TypeIV_III[i][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_III[i][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_III[i][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_III[i][j][1][7][c & 0xf][d & 0xf];
+        -:  516:            
+    49360:  517:            state[4*j + 0] = (TypeIV_III[i][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_III[i][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+    49360:  518:            state[4*j + 1] = (TypeIV_III[i][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_III[i][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+    49360:  519:            state[4*j + 2] = (TypeIV_III[i][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_III[i][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+    49360:  520:            state[4*j + 3] = (TypeIV_III[i][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_III[i][j][2][7][ab & 0xf][cd & 0xf];
+        -:  521:        }
+        -:  522:    }
+        -:  523:
+        -:  524:    // Round 8
+     2468:  525:    shiftRows (state);
+    12340:  526:    for (j = 0; j < 4; j++)
+        -:  527:    {
+     9872:  528:        a = TypeII_MO_R8[4*j + 0][state[4*j + 0]];
+     9872:  529:        b = TypeII_MO_R8[4*j + 1][state[4*j + 1]];
+     9872:  530:        c = TypeII_MO_R8[4*j + 2][state[4*j + 2]];
+     9872:  531:        d = TypeII_MO_R8[4*j + 3][state[4*j + 3]];
+        -:  532:
+     9872:  533:        aa = TypeII_MO_R8_Mask[4*j + 0][state[4*j + 0]];
+     9872:  534:        bb = TypeII_MO_R8_Mask[4*j + 1][state[4*j + 1]];
+     9872:  535:        cc = TypeII_MO_R8_Mask[4*j + 2][state[4*j + 2]];
+     9872:  536:        dd = TypeII_MO_R8_Mask[4*j + 3][state[4*j + 3]];
+        -:  537:        // 
+     9872:  538:        ab = (TypeIV_II[7][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_II[7][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_II[7][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) | (TypeIV_II[7][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  539:        (TypeIV_II[7][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_II[7][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_II[7][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_II[7][j][0][7][a & 0xf][b & 0xf];
+        -:  540:        
+     9872:  541:        cd = (TypeIV_II[7][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_II[7][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_II[7][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) | (TypeIV_II[7][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  542:        (TypeIV_II[7][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_II[7][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_II[7][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_II[7][j][1][7][c & 0xf][d & 0xf];
+        -:  543:        
+     9872:  544:        state[4*j + 0] = (TypeIV_II[7][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_II[7][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  545:        state[4*j + 1] = (TypeIV_II[7][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_II[7][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  546:        state[4*j + 2] = (TypeIV_II[7][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_II[7][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  547:        state[4*j + 3] = (TypeIV_II[7][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_II[7][j][2][7][ab & 0xf][cd & 0xf];
+        -:  548:        // 
+     9872:  549:        ab = (TypeIV_IIM_R8[j][0][0][(aa >> 28) & 0xf][(bb >> 28) & 0xf] << 28) | (TypeIV_IIM_R8[j][0][1][(aa >> 24) & 0xf][(bb >> 24) & 0xf] << 24) | (TypeIV_IIM_R8[j][0][2][(aa >> 20) & 0xf][(bb >> 20) & 0xf] << 20) | (TypeIV_IIM_R8[j][0][3][(aa >> 16) & 0xf][(bb >> 16) & 0xf] << 16) |\
+     9872:  550:        (TypeIV_IIM_R8[j][0][4][(aa >> 12) & 0xf][(bb >> 12) & 0xf] << 12) | (TypeIV_IIM_R8[j][0][5][(aa >> 8) & 0xf][(bb >> 8) & 0xf] << 8) | (TypeIV_IIM_R8[j][0][6][(aa >> 4) & 0xf][(bb >> 4) & 0xf] << 4) | TypeIV_IIM_R8[j][0][7][aa & 0xf][bb & 0xf];
+        -:  551:        
+     9872:  552:        cd = (TypeIV_IIM_R8[j][1][0][(cc >> 28) & 0xf][(dd >> 28) & 0xf] << 28) | (TypeIV_IIM_R8[j][1][1][(cc >> 24) & 0xf][(dd >> 24) & 0xf] << 24) | (TypeIV_IIM_R8[j][1][2][(cc >> 20) & 0xf][(dd >> 20) & 0xf] << 20) | (TypeIV_IIM_R8[j][1][3][(cc >> 16) & 0xf][(dd >> 16) & 0xf] << 16) |\
+     9872:  553:        (TypeIV_IIM_R8[j][1][4][(cc >> 12) & 0xf][(dd >> 12) & 0xf] << 12) | (TypeIV_IIM_R8[j][1][5][(cc >> 8) & 0xf][(dd >> 8) & 0xf] << 8) | (TypeIV_IIM_R8[j][1][6][(cc >> 4) & 0xf][(dd >> 4) & 0xf] << 4) | TypeIV_IIM_R8[j][1][7][cc & 0xf][dd & 0xf];
+        -:  554:        
+     9872:  555:        mask[4*j + 0] = (TypeIV_IIM_R8[j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_IIM_R8[j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  556:        mask[4*j + 1] = (TypeIV_IIM_R8[j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_IIM_R8[j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  557:        mask[4*j + 2] = (TypeIV_IIM_R8[j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_IIM_R8[j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  558:        mask[4*j + 3] = (TypeIV_IIM_R8[j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_IIM_R8[j][2][7][ab & 0xf][cd & 0xf];
+        -:  559:        // 
+     9872:  560:        a = TypeIII[7][4*j + 0][state[4*j + 0]];
+     9872:  561:        b = TypeIII[7][4*j + 1][state[4*j + 1]];
+     9872:  562:        c = TypeIII[7][4*j + 2][state[4*j + 2]];
+     9872:  563:        d = TypeIII[7][4*j + 3][state[4*j + 3]];
+        -:  564:
+     9872:  565:        ab = (TypeIV_III[7][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_III[7][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_III[7][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) | (TypeIV_III[7][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  566:        (TypeIV_III[7][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_III[7][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_III[7][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_III[7][j][0][7][a & 0xf][b & 0xf];
+        -:  567:        
+     9872:  568:        cd = (TypeIV_III[7][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_III[7][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_III[7][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) | (TypeIV_III[7][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  569:        (TypeIV_III[7][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_III[7][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_III[7][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_III[7][j][1][7][c & 0xf][d & 0xf];
+        -:  570:        
+     9872:  571:        state[4*j + 0] = (TypeIV_III[7][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_III[7][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  572:        state[4*j + 1] = (TypeIV_III[7][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_III[7][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  573:        state[4*j + 2] = (TypeIV_III[7][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_III[7][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  574:        state[4*j + 3] = (TypeIV_III[7][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_III[7][j][2][7][ab & 0xf][cd & 0xf];
+        -:  575:    }
+        -:  576:
+        -:  577:    // Round 9
+     2468:  578:    shiftRows (state);
+     2468:  579:    shiftRows (mask);
+    12340:  580:    for (j = 0; j < 4; j++)
+        -:  581:    {
+     9872:  582:        a = TypeII_MIMO_R9[4*j + 0][state[4*j + 0]][mask[4*j + 0]];
+     9872:  583:        b = TypeII_MIMO_R9[4*j + 1][state[4*j + 1]][mask[4*j + 1]];
+     9872:  584:        c = TypeII_MIMO_R9[4*j + 2][state[4*j + 2]][mask[4*j + 2]];
+     9872:  585:        d = TypeII_MIMO_R9[4*j + 3][state[4*j + 3]][mask[4*j + 3]];
+        -:  586:
+     9872:  587:        aa = TypeII_MIMO_R9_Mask[4*j + 0][state[4*j + 0]][mask[4*j + 0]];
+     9872:  588:        bb = TypeII_MIMO_R9_Mask[4*j + 1][state[4*j + 1]][mask[4*j + 1]];
+     9872:  589:        cc = TypeII_MIMO_R9_Mask[4*j + 2][state[4*j + 2]][mask[4*j + 2]];
+     9872:  590:        dd = TypeII_MIMO_R9_Mask[4*j + 3][state[4*j + 3]][mask[4*j + 3]];
+        -:  591:        // 
+     9872:  592:        ab = (TypeIV_II[8][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_II[8][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_II[8][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) | (TypeIV_II[8][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  593:        (TypeIV_II[8][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_II[8][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_II[8][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_II[8][j][0][7][a & 0xf][b & 0xf];
+        -:  594:        
+     9872:  595:        cd = (TypeIV_II[8][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_II[8][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_II[8][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) | (TypeIV_II[8][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  596:        (TypeIV_II[8][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_II[8][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_II[8][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_II[8][j][1][7][c & 0xf][d & 0xf];
+        -:  597:        
+     9872:  598:        state[4*j + 0] = (TypeIV_II[8][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_II[8][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  599:        state[4*j + 1] = (TypeIV_II[8][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_II[8][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  600:        state[4*j + 2] = (TypeIV_II[8][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_II[8][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  601:        state[4*j + 3] = (TypeIV_II[8][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_II[8][j][2][7][ab & 0xf][cd & 0xf];
+        -:  602:        // 
+     9872:  603:        ab = (TypeIV_IIM_R9[j][0][0][(aa >> 28) & 0xf][(bb >> 28) & 0xf] << 28) | (TypeIV_IIM_R9[j][0][1][(aa >> 24) & 0xf][(bb >> 24) & 0xf] << 24) | (TypeIV_IIM_R9[j][0][2][(aa >> 20) & 0xf][(bb >> 20) & 0xf] << 20) | (TypeIV_IIM_R9[j][0][3][(aa >> 16) & 0xf][(bb >> 16) & 0xf] << 16) |\
+     9872:  604:        (TypeIV_IIM_R9[j][0][4][(aa >> 12) & 0xf][(bb >> 12) & 0xf] << 12) | (TypeIV_IIM_R9[j][0][5][(aa >> 8) & 0xf][(bb >> 8) & 0xf] << 8) | (TypeIV_IIM_R9[j][0][6][(aa >> 4) & 0xf][(bb >> 4) & 0xf] << 4) | TypeIV_IIM_R9[j][0][7][aa & 0xf][bb & 0xf];
+        -:  605:        
+     9872:  606:        cd = (TypeIV_IIM_R9[j][1][0][(cc >> 28) & 0xf][(dd >> 28) & 0xf] << 28) | (TypeIV_IIM_R9[j][1][1][(cc >> 24) & 0xf][(dd >> 24) & 0xf] << 24) | (TypeIV_IIM_R9[j][1][2][(cc >> 20) & 0xf][(dd >> 20) & 0xf] << 20) | (TypeIV_IIM_R9[j][1][3][(cc >> 16) & 0xf][(dd >> 16) & 0xf] << 16) |\
+     9872:  607:        (TypeIV_IIM_R9[j][1][4][(cc >> 12) & 0xf][(dd >> 12) & 0xf] << 12) | (TypeIV_IIM_R9[j][1][5][(cc >> 8) & 0xf][(dd >> 8) & 0xf] << 8) | (TypeIV_IIM_R9[j][1][6][(cc >> 4) & 0xf][(dd >> 4) & 0xf] << 4) | TypeIV_IIM_R9[j][1][7][cc & 0xf][dd & 0xf];
+        -:  608:        
+     9872:  609:        mask[4*j + 0] = (TypeIV_IIM_R9[j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_IIM_R9[j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  610:        mask[4*j + 1] = (TypeIV_IIM_R9[j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_IIM_R9[j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  611:        mask[4*j + 2] = (TypeIV_IIM_R9[j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_IIM_R9[j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  612:        mask[4*j + 3] = (TypeIV_IIM_R9[j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_IIM_R9[j][2][7][ab & 0xf][cd & 0xf];
+        -:  613:
+     9872:  614:        a = TypeIII[8][4*j + 0][state[4*j + 0]];
+     9872:  615:        b = TypeIII[8][4*j + 1][state[4*j + 1]];
+     9872:  616:        c = TypeIII[8][4*j + 2][state[4*j + 2]];
+     9872:  617:        d = TypeIII[8][4*j + 3][state[4*j + 3]];
+        -:  618:
+     9872:  619:        ab = (TypeIV_III[8][j][0][0][(a >> 28) & 0xf][(b >> 28) & 0xf] << 28) | (TypeIV_III[8][j][0][1][(a >> 24) & 0xf][(b >> 24) & 0xf] << 24) | (TypeIV_III[8][j][0][2][(a >> 20) & 0xf][(b >> 20) & 0xf] << 20) |(TypeIV_III[8][j][0][3][(a >> 16) & 0xf][(b >> 16) & 0xf] << 16) |\
+     9872:  620:        (TypeIV_III[8][j][0][4][(a >> 12) & 0xf][(b >> 12) & 0xf] << 12) | (TypeIV_III[8][j][0][5][(a >> 8) & 0xf][(b >> 8) & 0xf] << 8) | (TypeIV_III[8][j][0][6][(a >> 4) & 0xf][(b >> 4) & 0xf] << 4) | TypeIV_III[8][j][0][7][a & 0xf][b & 0xf];
+        -:  621:        
+     9872:  622:        cd = (TypeIV_III[8][j][1][0][(c >> 28) & 0xf][(d >> 28) & 0xf] << 28) | (TypeIV_III[8][j][1][1][(c >> 24) & 0xf][(d >> 24) & 0xf] << 24) | (TypeIV_III[8][j][1][2][(c >> 20) & 0xf][(d >> 20) & 0xf] << 20) |(TypeIV_III[8][j][1][3][(c >> 16) & 0xf][(d >> 16) & 0xf] << 16) |\
+     9872:  623:        (TypeIV_III[8][j][1][4][(c >> 12) & 0xf][(d >> 12) & 0xf] << 12) | (TypeIV_III[8][j][1][5][(c >> 8) & 0xf][(d >> 8) & 0xf] << 8) | (TypeIV_III[8][j][1][6][(c >> 4) & 0xf][(d >> 4) & 0xf] << 4) | TypeIV_III[8][j][1][7][c & 0xf][d & 0xf];
+        -:  624:        
+     9872:  625:        state[4*j + 0] = (TypeIV_III[8][j][2][0][(ab >> 28) & 0xf][(cd >> 28) & 0xf] << 4) | TypeIV_III[8][j][2][1][(ab >> 24) & 0xf][(cd >> 24) & 0xf];
+     9872:  626:        state[4*j + 1] = (TypeIV_III[8][j][2][2][(ab >> 20) & 0xf][(cd >> 20) & 0xf] << 4) | TypeIV_III[8][j][2][3][(ab >> 16) & 0xf][(cd >> 16) & 0xf];
+     9872:  627:        state[4*j + 2] = (TypeIV_III[8][j][2][4][(ab >> 12) & 0xf][(cd >> 12) & 0xf] << 4) | TypeIV_III[8][j][2][5][(ab >> 8) & 0xf][(cd >> 8) & 0xf];
+     9872:  628:        state[4*j + 3] = (TypeIV_III[8][j][2][6][(ab >> 4) & 0xf][(cd >> 4) & 0xf] << 4) | TypeIV_III[8][j][2][7][ab & 0xf][cd & 0xf];
+        -:  629:    }
+        -:  630:
+        -:  631:    // Round 10
+     2468:  632:    shiftRows (state);
+     2468:  633:    shiftRows (mask);
+    41956:  634:    for (j = 0; j < 16; j++)
+        -:  635:    {
+    39488:  636:        output[j] = TypeV_MI[j][state[j]][mask[j]];
+        -:  637:    }
+     2468:  638:}

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libWBAES_LIB.a CMakeFiles/WBAES_LIB.dir/src/WBMatrix/WBMatrix.c.o CMakeFiles/WBAES_LIB.dir/src/WBMatrix/random.c.o CMakeFiles/WBAES_LIB.dir/src/aes.c.o CMakeFiles/WBAES_LIB.dir/src/wbaes.c.o
+/usr/bin/ranlib libWBAES_LIB.a

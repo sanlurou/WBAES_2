@@ -1,0 +1,3613 @@
+        -:    0:Source:/workspace/Improved-Masking-for-White-box-AES/src/WBMatrix/WBMatrix.c
+        -:    1:#include "WBMatrix/WBMatrix.h"
+        -:    2:
+        -:    3:unsigned int randseed;
+        -:    4:
+        -:    5://8bit internal xor table
+        -:    6:int xor[] = {0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 
+        -:    7:1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 
+        -:    8:1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 
+        -:    9:1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 
+        -:   10:1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 
+        -:   11:0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 
+        -:   12:1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 
+        -:   13:0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 
+        -:   14:1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 
+        -:   15:1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 
+        -:   16:0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 
+        -:   17:0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 
+        -:   18:1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0};
+        -:   19:
+        -:   20://8bit Hamming weight table
+        -:   21:int HW[] = {0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 
+        -:   22:3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 
+        -:   23:3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 
+        -:   24:5, 5, 6, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 
+        -:   25:3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3, 
+        -:   26:4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 
+        -:   27:5, 5, 6, 5, 6, 6, 7, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 
+        -:   28:4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 2, 
+        -:   29:3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 
+        -:   30:5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 2, 3, 3, 4, 3, 4, 4, 5, 3, 
+        -:   31:4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 
+        -:   32:6, 6, 7, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4, 
+        -:   33:5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8};
+        -:   34:
+        -:   35:uint8_t idM4[4] = {0x08, 0x04, 0x02, 0x01};
+        -:   36:uint8_t idM8[8] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
+        -:   37:uint16_t idM16[16] = {0x8000, 0x4000, 0x2000, 0x1000, 0x800, 0x400, 0x200, 0x100, 0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1};
+        -:   38:uint32_t idM32[32] = {0x80000000, 0x40000000, 0x20000000, 0x10000000, 0x8000000, 0x4000000, 0x2000000, 0x1000000, 0x800000, 0x400000, 0x200000, 0x100000, 0x80000, 0x40000, 0x20000, 0x10000, 0x8000, 0x4000, 0x2000, 0x1000, 0x800, 0x400, 0x200, 0x100, 0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1};
+        -:   39:uint64_t idM64[64] = {0x8000000000000000, 0x4000000000000000, 0x2000000000000000, 0x1000000000000000, 0x800000000000000, 0x400000000000000, 0x200000000000000, 0x100000000000000, 0x80000000000000, 0x40000000000000, 0x20000000000000, 0x10000000000000, 0x8000000000000, 0x4000000000000, 0x2000000000000, 0x1000000000000, 0x800000000000, 0x400000000000, 0x200000000000, 0x100000000000, 0x80000000000, 0x40000000000, 0x20000000000, 0x10000000000, 0x8000000000, 0x4000000000, 0x2000000000, 0x1000000000, 0x800000000, 0x400000000, 0x200000000, 0x100000000, \
+        -:   40:                        0x80000000, 0x40000000, 0x20000000, 0x10000000, 0x8000000, 0x4000000, 0x2000000, 0x1000000, 0x800000, 0x400000, 0x200000, 0x100000, 0x80000, 0x40000, 0x20000, 0x10000, 0x8000, 0x4000, 0x2000, 0x1000, 0x800, 0x400, 0x200, 0x100, 0x80, 0x40, 0x20, 0x10, 0x8, 0x4, 0x2, 0x1};
+        -:   41:
+        2:   42:void SetRandSeed(unsigned int seed)
+        -:   43:{
+        2:   44:    randseed = seed;
+        2:   45:}
+        -:   46:
+        4:   47:void initM4(M4 *Mat)//initial Matrix 4*4
+        -:   48:{
+        -:   49:    int i;
+       20:   50:    for(i = 0; i < 4; i++)
+        -:   51:    {
+       16:   52:        (*Mat).M[i] = 0;
+        -:   53:    }
+        4:   54:}
+        2:   55:void initM8(M8 *Mat)//initial Matrix 8*8
+        -:   56:{
+        -:   57:    int i;
+       18:   58:    for(i = 0; i < 8; i++)
+        -:   59:    {
+       16:   60:        (*Mat).M[i] = 0;
+        -:   61:    }
+        2:   62:}
+        2:   63:void initM16(M16 *Mat)//initial Matrix 16*16
+        -:   64:{
+        -:   65:    int i;
+       34:   66:    for(i = 0; i < 16; i++)
+        -:   67:    {
+       32:   68:        (*Mat).M[i] = 0;
+        -:   69:    }
+        2:   70:}
+    13730:   71:void initM32(M32 *Mat)//initial Matrix 32*32
+        -:   72:{
+        -:   73:    int i;
+   453090:   74:    for(i = 0; i < 32; i++)
+        -:   75:    {
+   439360:   76:        (*Mat).M[i] = 0;
+        -:   77:    }
+    13730:   78:}
+    #####:   79:void initM64(M64 *Mat)//initial Matrix 64*64
+        -:   80:{
+        -:   81:    int i;
+    #####:   82:    for(i = 0; i < 64; i++)
+        -:   83:    {
+    #####:   84:        (*Mat).M[i] = 0;
+        -:   85:    }
+    #####:   86:}
+    #####:   87:void initM128(M128 *Mat)//initial Matrix 128*128
+        -:   88:{
+        -:   89:    int i;
+    #####:   90:    for(i = 0; i < 128; i++)
+        -:   91:    {
+    #####:   92:        (*Mat).M[i][0] = 0;
+    #####:   93:        (*Mat).M[i][1] = 0;
+        -:   94:    }
+    #####:   95:}
+        2:   96:void initV4(V4 *Vec)//initial Vector 4*1
+        -:   97:{
+        2:   98:    (*Vec).V = 0;
+        2:   99:}
+        2:  100:void initV8(V8 *Vec)//initial Vector 8*1
+        -:  101:{
+        2:  102:    (*Vec).V = 0;
+        2:  103:}
+        2:  104:void initV16(V16 *Vec)//initial Vector 16*1
+        -:  105:{
+        2:  106:    (*Vec).V = 0;
+        2:  107:}
+        2:  108:void initV32(V32 *Vec)//initial Vector 32*1
+        -:  109:{
+        2:  110:    (*Vec).V = 0;
+        2:  111:}
+    #####:  112:void initV64(V64 *Vec)//initial Vector 64*1
+        -:  113:{
+    #####:  114:    (*Vec).V = 0;
+    #####:  115:}
+    #####:  116:void initV128(V128 *Vec)//initial Vector 128*1
+        -:  117:{
+    #####:  118:    (*Vec).V[0] = 0;
+    #####:  119:    (*Vec).V[1] = 0;
+    #####:  120:}
+        2:  121:void randM4(M4 *Mat)//randomize Matrix 4*4 
+        -:  122:{
+        -:  123:    int i;
+        2:  124:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+       10:  125:    for(i = 0; i < 4; i++)
+        -:  126:    {
+        8:  127:        (*Mat).M[i] = cus_random() & 0x0f;
+        -:  128:    }
+        2:  129:}
+    54914:  130:void randM8(M8 *Mat)//randomize Matrix 8*8 
+        -:  131:{
+        -:  132:    int i;
+    54914:  133:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+   494226:  134:    for(i = 0; i < 8; i++)
+        -:  135:    {
+   439312:  136:        (*Mat).M[i] = cus_random();
+        -:  137:    }
+    54914:  138:}
+    #####:  139:void randM16(M16 *Mat)//randomize Matrix 16*16 
+        -:  140:{
+        -:  141:    int i;
+    #####:  142:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    #####:  143:    for(i = 0; i < 16; i++)
+        -:  144:    {
+    #####:  145:        (*Mat).M[i] = cus_random();
+        -:  146:    }
+    #####:  147:}
+    10296:  148:void randM32(M32 *Mat)//randomize Matrix 32*32 
+        -:  149:{
+        -:  150:    int i;
+    10296:  151:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+   339768:  152:    for(i = 0; i < 32; i++)
+        -:  153:    {
+   329472:  154:        (*Mat).M[i] = cus_random();
+        -:  155:    }
+    10296:  156:}
+    #####:  157:void randM64(M64 *Mat)//randomize Matrix 64*64 
+        -:  158:{
+        -:  159:    int i;
+        -:  160:    uint32_t *m;
+    #####:  161:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    #####:  162:    for(i = 0; i < 64; i++)
+        -:  163:    {
+    #####:  164:        m = (uint32_t*)&((*Mat).M[i]);
+    #####:  165:        *(m+1) = cus_random();
+    #####:  166:        *m = cus_random();
+        -:  167:    }
+    #####:  168:}
+    #####:  169:void randM128(M128 *Mat)//randomize Matrix 128*128 
+        -:  170:{
+        -:  171:    int i;
+        -:  172:    uint32_t *m;
+    #####:  173:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    #####:  174:    for(i = 0; i < 128; i++)
+        -:  175:    {
+    #####:  176:        m = (uint32_t*)&((*Mat).M[i][0]);
+    #####:  177:        *(m+1) = cus_random();
+    #####:  178:        *m = cus_random();
+    #####:  179:        m = (uint32_t*)&((*Mat).M[i][1]);
+    #####:  180:        *(m+1) = cus_random();
+    #####:  181:        *m = cus_random();
+        -:  182:    }
+    #####:  183:}
+        2:  184:void identityM4(M4 *Mat)//identity matrix 4*4
+        -:  185:{
+        -:  186:    int i;
+       10:  187:    for(i = 0; i < 4; i++)
+        -:  188:    {
+        8:  189:        (*Mat).M[i] = idM4[i];
+        -:  190:    }
+        2:  191:}
+   109824:  192:void identityM8(M8 *Mat)//identity matrix 8*8
+        -:  193:{
+        -:  194:    int i;
+   988416:  195:    for(i = 0; i < 8; i++)
+        -:  196:    {
+   878592:  197:        (*Mat).M[i] = idM8[i];
+        -:  198:    }
+   109824:  199:}
+    #####:  200:void identityM16(M16 *Mat)//identity matrix 16*16
+        -:  201:{
+        -:  202:    int i;
+    #####:  203:    for(i = 0; i < 16; i++)
+        -:  204:    {
+    #####:  205:        (*Mat).M[i] = idM16[i];
+        -:  206:    }
+    #####:  207:}
+    20592:  208:void identityM32(M32 *Mat)//identity matrix 32*32
+        -:  209:{
+        -:  210:    int i;
+   679536:  211:    for(i = 0; i < 32; i++)
+        -:  212:    {
+   658944:  213:        (*Mat).M[i] = idM32[i];
+        -:  214:    }
+    20592:  215:}
+    #####:  216:void identityM64(M64 *Mat)//identity matrix 64*64
+        -:  217:{
+        -:  218:    int i;
+    #####:  219:    for(i = 0; i < 64; i++)
+        -:  220:    {
+    #####:  221:        (*Mat).M[i] = idM64[i];
+        -:  222:    }
+    #####:  223:}
+    #####:  224:void identityM128(M128 *Mat)//identity matrix 128*128
+        -:  225:{
+        -:  226:    int i;
+    #####:  227:    for(i = 0; i < 64; i++)
+        -:  228:    {
+    #####:  229:        (*Mat).M[i][0] = idM64[i];
+    #####:  230:        (*Mat).M[i][1] = 0;
+        -:  231:    }
+    #####:  232:    for(i = 64; i < 128; i++)
+        -:  233:    {
+    #####:  234:        (*Mat).M[i][0] = 0;
+    #####:  235:        (*Mat).M[i][1] = idM64[i-64];
+        -:  236:    }
+    #####:  237:}
+        2:  238:void randV4(V4 *Vec)//randomize Vector 4*1
+        -:  239:{
+        2:  240:    InitRandom((randseed++)^(unsigned int)time(NULL));
+        2:  241:    (*Vec).V = cus_random() & 0x0f;
+        2:  242:}
+        2:  243:void randV8(V8 *Vec)//randomize Vector 8*1
+        -:  244:{
+        2:  245:    InitRandom((randseed++)^(unsigned int)time(NULL));
+        2:  246:    (*Vec).V = cus_random();
+        2:  247:}
+    #####:  248:void randV16(V16 *Vec)//randomize Vector 16*1
+        -:  249:{
+    #####:  250:    InitRandom((randseed++)^(unsigned int)time(NULL));
+    #####:  251:    (*Vec).V = cus_random();
+    #####:  252:}
+    #####:  253:void randV32(V32 *Vec)//randomize Vector 32*1
+        -:  254:{
+    #####:  255:    uint16_t *v = (uint16_t*)&((*Vec).V);
+    #####:  256:    InitRandom((randseed++)^(unsigned int)time(NULL));
+    #####:  257:    *(v+1) = cus_random();
+    #####:  258:    *v = cus_random();
+    #####:  259:}
+    #####:  260:void randV64(V64 *Vec)//randomize Vector 64*1
+        -:  261:{
+    #####:  262:    uint16_t *v = (uint16_t*)&((*Vec).V);
+    #####:  263:    InitRandom((randseed++)^(unsigned int)time(NULL));
+    #####:  264:    *(v+3) = cus_random();
+    #####:  265:    *(v+2) = cus_random();
+    #####:  266:    *(v+1) = cus_random();
+    #####:  267:    *v = cus_random();
+    #####:  268:}
+    #####:  269:void randV128(V128 *Vec)//randomize Vector 128*1
+        -:  270:{
+    #####:  271:    uint16_t *v = (uint16_t*)&((*Vec).V[0]);
+    #####:  272:    InitRandom((randseed++)^(unsigned int)time(NULL));
+    #####:  273:    *(v+3) = cus_random();
+    #####:  274:    *(v+2) = cus_random();
+    #####:  275:    *(v+1) = cus_random();
+    #####:  276:    *v = cus_random();
+    #####:  277:    v = (uint16_t*)&((*Vec).V[1]);
+    #####:  278:    *(v+3) = cus_random();
+    #####:  279:    *(v+2) = cus_random();
+    #####:  280:    *(v+1) = cus_random();
+    #####:  281:    *v = cus_random();
+    #####:  282:}
+    #####:  283:void printM4(M4 Mat)//printf Matrix 4*4
+        -:  284:{
+        -:  285:    int i;
+    #####:  286:    for(i = 0; i < 4; i++)
+        -:  287:    {
+    #####:  288:        printf("0x%x\n", Mat.M[i]);
+        -:  289:    }
+    #####:  290:}
+    #####:  291:void printM8(M8 Mat)//printf Matrix 8*8
+        -:  292:{
+        -:  293:    int i;
+    #####:  294:    for(i = 0; i < 8; i++)
+        -:  295:    {
+    #####:  296:        printf("0x%x\n", Mat.M[i]);
+        -:  297:    }
+    #####:  298:}
+    #####:  299:void printM16(M16 Mat)//printf Matrix 16*16
+        -:  300:{
+        -:  301:    int i;
+    #####:  302:    for(i = 0; i < 16; i++)
+        -:  303:    {
+    #####:  304:        printf("0x%x\n", Mat.M[i]);
+        -:  305:    }
+    #####:  306:}
+    #####:  307:void printM32(M32 Mat)//printf Matrix 32*32
+        -:  308:{
+        -:  309:    int i;
+    #####:  310:    for(i = 0; i < 32; i++)
+        -:  311:    {
+    #####:  312:        printf("0x%x\n", Mat.M[i]);
+        -:  313:    }
+    #####:  314:}
+    #####:  315:void printM64(M64 Mat)//printf Matrix 64*64
+        -:  316:{
+        -:  317:    int i;
+    #####:  318:    for(i = 0; i < 64; i++)
+        -:  319:    {
+    #####:  320:        printf("0x%llx\n", Mat.M[i]);
+        -:  321:    }
+    #####:  322:}
+    #####:  323:void printM128(M128 Mat)//printf Matrix 128*128
+        -:  324:{
+        -:  325:    int i;
+    #####:  326:    for(i = 0; i < 128; i++)
+        -:  327:    {
+    #####:  328:        printf("0x%llx ", Mat.M[i][0]);
+    #####:  329:        printf("0x%llx\n", Mat.M[i][1]);
+        -:  330:    }
+    #####:  331:}
+    #####:  332:void printV4(V4 Vec)//printf Vector 4*1
+        -:  333:{
+    #####:  334:    printf("0x%x\n", Vec.V);
+    #####:  335:}
+    #####:  336:void printV8(V8 Vec)//printf Vector 8*1
+        -:  337:{
+    #####:  338:    printf("0x%x\n", Vec.V);
+    #####:  339:}
+    #####:  340:void printV16(V16 Vec)//printf Vector 16*1
+        -:  341:{
+    #####:  342:    printf("0x%x\n", Vec.V);
+    #####:  343:}
+    #####:  344:void printV32(V32 Vec)//printf Vector 32*1
+        -:  345:{
+    #####:  346:    printf("0x%x\n", Vec.V);
+    #####:  347:}
+    #####:  348:void printV64(V64 Vec)//printf Vector 64*1
+        -:  349:{
+    #####:  350:    printf("0x%llx\n", Vec.V);
+    #####:  351:}
+    #####:  352:void printV128(V128 Vec)//printf Vector 128*1
+        -:  353:{
+    #####:  354:    printf("0x%llx ", Vec.V[0]);
+    #####:  355:    printf("0x%llx\n", Vec.V[1]);
+    #####:  356:}
+        2:  357:void copyM4(M4 Mat1, M4 *Mat2)
+        -:  358:{
+        -:  359:    int i;
+       10:  360:    for(i = 0; i < 4; i++)
+        -:  361:    {
+        8:  362:        (*Mat2).M[i] = Mat1.M[i];
+        -:  363:    }
+        2:  364:}
+    70740:  365:void copyM8(M8 Mat1, M8 *Mat2)
+        -:  366:{
+        -:  367:    int i;
+   636660:  368:    for(i = 0; i < 8; i++)
+        -:  369:    {
+   565920:  370:        (*Mat2).M[i] = Mat1.M[i];
+        -:  371:    }
+    70740:  372:}
+    #####:  373:void copyM16(M16 Mat1, M16 *Mat2)
+        -:  374:{
+        -:  375:    int i;
+    #####:  376:    for(i = 0; i < 16; i++)
+        -:  377:    {
+    #####:  378:        (*Mat2).M[i] = Mat1.M[i];
+        -:  379:    }
+    #####:  380:}
+    13214:  381:void copyM32(M32 Mat1, M32 *Mat2)
+        -:  382:{
+        -:  383:    int i;
+   436062:  384:    for(i = 0; i < 32; i++)
+        -:  385:    {
+   422848:  386:        (*Mat2).M[i] = Mat1.M[i];
+        -:  387:    }
+    13214:  388:}
+    #####:  389:void copyM64(M64 Mat1, M64 *Mat2)
+        -:  390:{
+        -:  391:    int i;
+    #####:  392:    for(i = 0; i < 64; i++)
+        -:  393:    {
+    #####:  394:        (*Mat2).M[i] = Mat1.M[i];
+        -:  395:    }
+    #####:  396:}
+    #####:  397:void copyM128(M128 Mat1, M128 *Mat2)
+        -:  398:{
+        -:  399:    int i;
+    #####:  400:    for(i = 0; i < 128; i++)
+        -:  401:    {
+    #####:  402:        (*Mat2).M[i][0] = Mat1.M[i][0];
+    #####:  403:        (*Mat2).M[i][1] = Mat1.M[i][1];
+        -:  404:    }
+    #####:  405:}
+        2:  406:int isequalM4(M4 Mat1, M4 Mat2)
+        -:  407:{
+        -:  408:    int i;
+        2:  409:    int flag = 1;
+       10:  410:    for(i = 0; i < 4; i++)
+        -:  411:    {
+        8:  412:        if(Mat1.M[i] != Mat2.M[i])
+        -:  413:        {
+    #####:  414:            flag = 0;
+    #####:  415:            break;
+        -:  416:        }
+        -:  417:    }
+        2:  418:    return flag;
+        -:  419:}
+    #####:  420:int isequalM8(M8 Mat1, M8 Mat2)
+        -:  421:{
+        -:  422:    int i;
+    #####:  423:    int flag = 1;
+    #####:  424:    for(i = 0; i < 8; i++)
+        -:  425:    {
+    #####:  426:        if(Mat1.M[i] != Mat2.M[i])
+        -:  427:        {
+    #####:  428:            flag = 0;
+    #####:  429:            break;
+        -:  430:        }
+        -:  431:    }
+    #####:  432:    return flag;
+        -:  433:}
+    #####:  434:int isequalM16(M16 Mat1, M16 Mat2)
+        -:  435:{
+        -:  436:    int i;
+    #####:  437:    int flag = 1;
+    #####:  438:    for(i = 0; i < 16; i++)
+        -:  439:    {
+    #####:  440:        if(Mat1.M[i] != Mat2.M[i])
+        -:  441:        {
+    #####:  442:            flag = 0;
+    #####:  443:            break;
+        -:  444:        }
+        -:  445:    }
+    #####:  446:    return flag;
+        -:  447:}
+    #####:  448:int isequalM32(M32 Mat1, M32 Mat2)
+        -:  449:{
+        -:  450:    int i;
+    #####:  451:    int flag = 1;
+    #####:  452:    for(i = 0; i < 32; i++)
+        -:  453:    {
+    #####:  454:        if(Mat1.M[i] != Mat2.M[i])
+        -:  455:        {
+    #####:  456:            flag = 0;
+    #####:  457:            break;
+        -:  458:        }
+        -:  459:    }
+    #####:  460:    return flag;
+        -:  461:}
+    #####:  462:int isequalM64(M64 Mat1, M64 Mat2)
+        -:  463:{
+        -:  464:    int i;
+    #####:  465:    int flag = 1;
+    #####:  466:    for(i = 0; i < 64; i++)
+        -:  467:    {
+    #####:  468:        if(Mat1.M[i] != Mat2.M[i])
+        -:  469:        {
+    #####:  470:            flag = 0;
+    #####:  471:            break;
+        -:  472:        }
+        -:  473:    }
+    #####:  474:    return flag;
+        -:  475:}
+    #####:  476:int isequalM128(M128 Mat1, M128 Mat2)
+        -:  477:{
+        -:  478:    int i;
+    #####:  479:    int flag = 1;
+    #####:  480:    for(i = 0; i < 128; i++)
+        -:  481:    {
+    #####:  482:        if(Mat1.M[i][0] != Mat2.M[i][0])
+        -:  483:        {
+    #####:  484:            flag = 0;
+    #####:  485:            break;
+        -:  486:        }
+    #####:  487:        if(Mat1.M[i][1] != Mat2.M[i][1])
+        -:  488:        {
+    #####:  489:            flag = 0;
+    #####:  490:            break;
+        -:  491:        }
+        -:  492:    }
+    #####:  493:    return flag;
+        -:  494:}
+    #####:  495:int isequalV4(V4 Vec1, V4 Vec2)
+        -:  496:{
+    #####:  497:    int flag = 1;
+    #####:  498:    if(Vec1.V != Vec2.V) flag = 0;
+    #####:  499:    return flag;
+        -:  500:}
+    #####:  501:int isequalV8(V8 Vec1, V8 Vec2)
+        -:  502:{
+    #####:  503:    int flag = 1;
+    #####:  504:    if(Vec1.V != Vec2.V) flag = 0;
+    #####:  505:    return flag;
+        -:  506:}
+    #####:  507:int isequalV16(V16 Vec1, V16 Vec2)
+        -:  508:{
+    #####:  509:    int flag = 1;
+    #####:  510:    if(Vec1.V != Vec2.V) flag = 0;
+    #####:  511:    return flag;
+        -:  512:}
+    #####:  513:int isequalV32(V32 Vec1, V32 Vec2)
+        -:  514:{
+    #####:  515:    int flag = 1;
+    #####:  516:    if(Vec1.V != Vec2.V) flag = 0;
+    #####:  517:    return flag;
+        -:  518:}
+    #####:  519:int isequalV64(V64 Vec1, V64 Vec2)
+        -:  520:{
+    #####:  521:    int flag = 1;
+    #####:  522:    if(Vec1.V != Vec2.V) flag = 0;
+    #####:  523:    return flag;
+        -:  524:}
+    #####:  525:int isequalV128(V128 Vec1, V128 Vec2)
+        -:  526:{
+    #####:  527:    int flag = 1;
+    #####:  528:    if(Vec1.V[0] != Vec2.V[0]) flag = 0;
+    #####:  529:    if(Vec1.V[1] != Vec2.V[1]) flag = 0;
+    #####:  530:    return flag;
+        -:  531:}
+       64:  532:int readbitM4(M4 Mat, int i, int j)//read one bit in a matrix, i in n rows, j in n columns, i,j: 0-3
+        -:  533:{
+       64:  534:    if((Mat.M[i] & idM4[j]) == idM4[j]) return 1;
+       48:  535:    else return 0;
+        -:  536:}
+    #####:  537:int readbitM8(M8 Mat, int i, int j)//read one bit in a matrix, i in n rows, j in n columns, i,j: 0-7
+        -:  538:{
+    #####:  539:    if((Mat.M[i] & idM8[j]) == idM8[j]) return 1;
+    #####:  540:    else return 0;
+        -:  541:}
+    #####:  542:int readbitM16(M16 Mat, int i, int j)//read one bit in a matrix, i in n rows, j in n columns, i,j: 0-15
+        -:  543:{
+    #####:  544:    if((Mat.M[i] & idM16[j]) == idM16[j]) return 1;
+    #####:  545:    else return 0;
+        -:  546:}
+    #####:  547:int readbitM32(M32 Mat, int i, int j)//read one bit in a matrix, i in n rows, j in n columns, i,j: 0-31
+        -:  548:{
+    #####:  549:    if((Mat.M[i] & idM32[j]) == idM32[j]) return 1;
+    #####:  550:    else return 0;
+        -:  551:}
+    #####:  552:int readbitM64(M64 Mat, int i, int j)//read one bit in a matrix, i in n rows, j in n columns, i,j: 0-63
+        -:  553:{
+    #####:  554:    if((Mat.M[i] & idM64[j]) == idM64[j]) return 1;
+    #####:  555:    else return 0;
+        -:  556:}
+    #####:  557:int readbitM128(M128 Mat, int i, int j)//read one bit in a matrix, i in n rows, j in n columns, i,j: 0-127
+        -:  558:{
+    #####:  559:    if(j < 64)
+        -:  560:    {
+    #####:  561:        if((Mat.M[i][0] & idM64[j]) == idM64[j]) return 1;
+    #####:  562:        else return 0;
+        -:  563:    }
+        -:  564:    else
+        -:  565:    {
+    #####:  566:        if((Mat.M[i][1] & idM64[j - 64]) == idM64[j - 64]) return 1;
+    #####:  567:        else return 0;
+        -:  568:    }
+        -:  569:}
+    #####:  570:void flipbitM4(M4 *Mat, int i, int j)//flip (i, j) bit in a matrix
+        -:  571:{
+    #####:  572:    (*Mat).M[i] ^= idM4[j];
+    #####:  573:}
+    #####:  574:void flipbitM8(M8 *Mat, int i, int j)//flip (i, j) bit in a matrix
+        -:  575:{
+    #####:  576:    (*Mat).M[i] ^= idM8[j];
+    #####:  577:}
+    #####:  578:void flipbitM16(M16 *Mat, int i, int j)//flip (i, j) bit in a matrix
+        -:  579:{
+    #####:  580:    (*Mat).M[i] ^= idM16[j];
+    #####:  581:}
+    #####:  582:void flipbitM32(M32 *Mat, int i, int j)//flip (i, j) bit in a matrix
+        -:  583:{
+    #####:  584:    (*Mat).M[i] ^= idM32[j];
+    #####:  585:}
+    #####:  586:void flipbitM64(M64 *Mat, int i, int j)//flip (i, j) bit in a matrix
+        -:  587:{
+    #####:  588:    (*Mat).M[i] ^= idM64[j];
+    #####:  589:}
+    #####:  590:void flipbitM128(M128 *Mat, int i, int j)//flip (i, j) bit in a matrix
+        -:  591:{
+    #####:  592:    if(j <64)
+        -:  593:    {
+    #####:  594:        (*Mat).M[i][0] ^= idM64[j];
+        -:  595:    }
+        -:  596:    else
+        -:  597:    {
+    #####:  598:        (*Mat).M[i][1] ^= idM64[j - 64];
+        -:  599:    }
+    #####:  600:}
+       32:  601:void setbitM4(M4 *Mat, int i, int j, int bit)//set (i, j) bit in a matrix, bit = 0/1
+        -:  602:{
+       32:  603:    if(readbitM4(*Mat, i, j) == bit) return;
+    #####:  604:    else flipbitM4(Mat, i, j);
+        -:  605:}
+    #####:  606:void setbitM8(M8 *Mat, int i, int j, int bit)//set (i, j) bit in a matrix, bit = 0/1
+        -:  607:{
+    #####:  608:    if(readbitM8(*Mat, i, j) == bit) return;
+    #####:  609:    else flipbitM8(Mat, i, j);
+        -:  610:}
+    #####:  611:void setbitM16(M16 *Mat, int i, int j, int bit)//set (i, j) bit in a matrix, bit = 0/1
+        -:  612:{
+    #####:  613:    if(readbitM16(*Mat, i, j) == bit) return;
+    #####:  614:    else flipbitM16(Mat, i, j);
+        -:  615:}
+    #####:  616:void setbitM32(M32 *Mat, int i, int j, int bit)//set (i, j) bit in a matrix, bit = 0/1
+        -:  617:{
+    #####:  618:    if(readbitM32(*Mat, i, j) == bit) return;
+    #####:  619:    else flipbitM32(Mat, i, j);
+        -:  620:}
+    #####:  621:void setbitM64(M64 *Mat, int i, int j, int bit)//set (i, j) bit in a matrix, bit = 0/1
+        -:  622:{
+    #####:  623:    if(readbitM64(*Mat, i, j) == bit) return;
+    #####:  624:    else flipbitM64(Mat, i, j);
+        -:  625:}
+    #####:  626:void setbitM128(M128 *Mat, int i, int j, int bit)//set (i, j) bit in a matrix, bit = 0/1
+        -:  627:{
+    #####:  628:    if(readbitM128(*Mat, i, j) == bit) return;
+    #####:  629:    else flipbitM128(Mat, i, j);
+        -:  630:}
+    #####:  631:int isinvertM4(M4 Mat)//Invertible Matrix?
+        -:  632:{
+        -:  633:    int i, j, k;
+        -:  634:    uint8_t temp;
+        -:  635:    int flag;
+    #####:  636:    for(i = 0; i < 4; i++)
+        -:  637:    {
+    #####:  638:        if((Mat.M[i] & idM4[i]) == idM4[i])
+        -:  639:        {
+    #####:  640:            for(j = i + 1; j < 4; j++)
+        -:  641:            {
+    #####:  642:                if((Mat.M[j] & idM4[i]) == idM4[i])
+        -:  643:                {
+    #####:  644:                    Mat.M[j] ^= Mat.M[i];
+        -:  645:                }
+        -:  646:            }
+        -:  647:        }
+        -:  648:        else
+        -:  649:        {
+    #####:  650:            flag = 1;
+    #####:  651:            for(j = i + 1; j < 4; j++)
+        -:  652:            {
+    #####:  653:                if((Mat.M[j] & idM4[i]) == idM4[i])
+        -:  654:                {
+    #####:  655:                    temp = Mat.M[i];
+    #####:  656:                    Mat.M[i] = Mat.M[j];
+    #####:  657:                    Mat.M[j] = temp;
+    #####:  658:                    flag = 0;
+    #####:  659:                    break;
+        -:  660:                }
+        -:  661:            }
+    #####:  662:            if(flag) return 0;
+    #####:  663:            for(k = i + 1; k < 4; k++)
+        -:  664:            {
+    #####:  665:                if((Mat.M[k] & idM4[i]) == idM4[i])
+        -:  666:                {
+    #####:  667:                    Mat.M[k] ^= Mat.M[i];
+        -:  668:                }
+        -:  669:            }
+        -:  670:        }
+        -:  671:    }
+    #####:  672:    if(Mat.M[3] == idM4[3]) return 1;
+    #####:  673:    else return 0;
+        -:  674:}
+    #####:  675:int isinvertM8(M8 Mat)//Invertible Matrix?
+        -:  676:{
+        -:  677:    int i, j, k;
+        -:  678:    uint8_t temp;
+        -:  679:    int flag;
+    #####:  680:    for(i = 0; i < 8; i++)
+        -:  681:    {
+    #####:  682:        if((Mat.M[i] & idM8[i]) == idM8[i])
+        -:  683:        {
+    #####:  684:            for(j = i + 1; j < 8; j++)
+        -:  685:            {
+    #####:  686:                if((Mat.M[j] & idM8[i]) == idM8[i])
+        -:  687:                {
+    #####:  688:                    Mat.M[j] ^= Mat.M[i];
+        -:  689:                }
+        -:  690:            }
+        -:  691:        }
+        -:  692:        else
+        -:  693:        {
+    #####:  694:            flag = 1;
+    #####:  695:            for(j = i + 1; j < 8; j++)
+        -:  696:            {
+    #####:  697:                if((Mat.M[j] & idM8[i]) == idM8[i])
+        -:  698:                {
+    #####:  699:                    temp = Mat.M[i];
+    #####:  700:                    Mat.M[i] = Mat.M[j];
+    #####:  701:                    Mat.M[j] = temp;
+    #####:  702:                    flag = 0;
+    #####:  703:                    break;
+        -:  704:                }
+        -:  705:            }
+    #####:  706:            if(flag) return 0;
+    #####:  707:            for(k = i + 1; k < 8; k++)
+        -:  708:            {
+    #####:  709:                if((Mat.M[k] & idM8[i]) == idM8[i])
+        -:  710:                {
+    #####:  711:                    Mat.M[k] ^= Mat.M[i];
+        -:  712:                }
+        -:  713:            }
+        -:  714:        }
+        -:  715:    }
+    #####:  716:    if(Mat.M[7] == idM8[7]) return 1;
+    #####:  717:    else return 0;
+        -:  718:}
+    #####:  719:int isinvertM16(M16 Mat)//Invertible Matrix?
+        -:  720:{
+        -:  721:    int i, j, k;
+        -:  722:    uint16_t temp;
+        -:  723:    int flag;
+    #####:  724:    for(i = 0; i < 16; i++)
+        -:  725:    {
+    #####:  726:        if((Mat.M[i] & idM16[i]) == idM16[i])
+        -:  727:        {
+    #####:  728:            for(j = i + 1; j < 16; j++)
+        -:  729:            {
+    #####:  730:                if((Mat.M[j] & idM16[i]) == idM16[i])
+        -:  731:                {
+    #####:  732:                    Mat.M[j] ^= Mat.M[i];
+        -:  733:                }
+        -:  734:            }
+        -:  735:        }
+        -:  736:        else
+        -:  737:        {
+    #####:  738:            flag = 1;
+    #####:  739:            for(j = i + 1; j < 16; j++)
+        -:  740:            {
+    #####:  741:                if((Mat.M[j] & idM16[i]) == idM16[i])
+        -:  742:                {
+    #####:  743:                    temp = Mat.M[i];
+    #####:  744:                    Mat.M[i] = Mat.M[j];
+    #####:  745:                    Mat.M[j] = temp;
+    #####:  746:                    flag = 0;
+    #####:  747:                    break;
+        -:  748:                }
+        -:  749:            }
+    #####:  750:            if(flag) return 0;
+    #####:  751:            for(k = i + 1; k < 16; k++)
+        -:  752:            {
+    #####:  753:                if((Mat.M[k] & idM16[i]) == idM16[i])
+        -:  754:                {
+    #####:  755:                    Mat.M[k] ^= Mat.M[i];
+        -:  756:                }
+        -:  757:            }
+        -:  758:        }
+        -:  759:    }
+    #####:  760:    if(Mat.M[15] == idM16[15]) return 1;
+    #####:  761:    else return 0;
+        -:  762:}
+    #####:  763:int isinvertM32(M32 Mat)//Invertible Matrix?
+        -:  764:{
+        -:  765:    int i, j, k;
+        -:  766:    uint32_t temp;
+        -:  767:    int flag;
+    #####:  768:    for(i = 0; i < 32; i++)
+        -:  769:    {
+    #####:  770:        if((Mat.M[i] & idM32[i]) == idM32[i])
+        -:  771:        {
+    #####:  772:            for(j = i + 1; j < 32; j++)
+        -:  773:            {
+    #####:  774:                if((Mat.M[j] & idM32[i]) == idM32[i])
+        -:  775:                {
+    #####:  776:                    Mat.M[j] ^= Mat.M[i];
+        -:  777:                }
+        -:  778:            }
+        -:  779:        }
+        -:  780:        else
+        -:  781:        {
+    #####:  782:            flag = 1;
+    #####:  783:            for(j = i + 1; j < 32; j++)
+        -:  784:            {
+    #####:  785:                if((Mat.M[j] & idM32[i]) == idM32[i])
+        -:  786:                {
+    #####:  787:                    temp = Mat.M[i];
+    #####:  788:                    Mat.M[i] = Mat.M[j];
+    #####:  789:                    Mat.M[j] = temp;
+    #####:  790:                    flag = 0;
+    #####:  791:                    break;
+        -:  792:                }
+        -:  793:            }
+    #####:  794:            if(flag) return 0;
+    #####:  795:            for(k = i + 1; k < 32; k++)
+        -:  796:            {
+    #####:  797:                if((Mat.M[k] & idM32[i]) == idM32[i])
+        -:  798:                {
+    #####:  799:                    Mat.M[k] ^= Mat.M[i];
+        -:  800:                }
+        -:  801:            }
+        -:  802:        }
+        -:  803:    }
+    #####:  804:    if(Mat.M[31] == idM32[31]) return 1;
+    #####:  805:    else return 0;
+        -:  806:}
+    #####:  807:int isinvertM64(M64 Mat)//Invertible Matrix?
+        -:  808:{
+        -:  809:    int i, j, k;
+        -:  810:    uint64_t temp;
+        -:  811:    int flag;
+    #####:  812:    for(i = 0; i < 64; i++)
+        -:  813:    {
+    #####:  814:        if((Mat.M[i] & idM64[i]) == idM64[i])
+        -:  815:        {
+    #####:  816:            for(j = i + 1; j < 64; j++)
+        -:  817:            {
+    #####:  818:                if((Mat.M[j] & idM64[i]) == idM64[i])
+        -:  819:                {
+    #####:  820:                    Mat.M[j] ^= Mat.M[i];
+        -:  821:                }
+        -:  822:            }
+        -:  823:        }
+        -:  824:        else
+        -:  825:        {
+    #####:  826:            flag = 1;
+    #####:  827:            for(j = i + 1; j < 64; j++)
+        -:  828:            {
+    #####:  829:                if((Mat.M[j] & idM64[i]) == idM64[i])
+        -:  830:                {
+    #####:  831:                    temp = Mat.M[i];
+    #####:  832:                    Mat.M[i] = Mat.M[j];
+    #####:  833:                    Mat.M[j] = temp;
+    #####:  834:                    flag = 0;
+    #####:  835:                    break;
+        -:  836:                }
+        -:  837:            }
+    #####:  838:            if(flag) return 0;
+    #####:  839:            for(k = i + 1; k < 64; k++)
+        -:  840:            {
+    #####:  841:                if((Mat.M[k] & idM64[i]) == idM64[i])
+        -:  842:                {
+    #####:  843:                    Mat.M[k] ^= Mat.M[i];
+        -:  844:                }
+        -:  845:            }
+        -:  846:        }
+        -:  847:    }
+    #####:  848:    if(Mat.M[63] == idM64[63]) return 1;
+    #####:  849:    else return 0;
+        -:  850:}
+    #####:  851:int isinvertM128(M128 Mat)//Invertible Matrix?
+        -:  852:{
+        -:  853:    int i, j, k;
+        -:  854:    uint64_t temp[2];
+        -:  855:    int flag;
+    #####:  856:    for(i = 0; i < 64; i++)
+        -:  857:    {
+    #####:  858:        if((Mat.M[i][0] & idM64[i]) == idM64[i])
+        -:  859:        {
+    #####:  860:            for(j = i + 1; j < 128; j++)
+        -:  861:            {
+    #####:  862:                if((Mat.M[j][0] & idM64[i]) == idM64[i])
+        -:  863:                {
+    #####:  864:                    Mat.M[j][0] ^= Mat.M[i][0];
+    #####:  865:                    Mat.M[j][1] ^= Mat.M[i][1];
+        -:  866:                }
+        -:  867:            }
+        -:  868:        }
+        -:  869:        else
+        -:  870:        {
+    #####:  871:            flag = 1;
+    #####:  872:            for(j = i + 1; j < 128; j++)
+        -:  873:            {
+    #####:  874:                if((Mat.M[j][0] & idM64[i]) == idM64[i])
+        -:  875:                {
+    #####:  876:                    temp[0] = Mat.M[i][0];
+    #####:  877:                    Mat.M[i][0] = Mat.M[j][0];
+    #####:  878:                    Mat.M[j][0] = temp[0];
+        -:  879:
+    #####:  880:                    temp[1] = Mat.M[i][1];
+    #####:  881:                    Mat.M[i][1] = Mat.M[j][1];
+    #####:  882:                    Mat.M[j][1] = temp[1];
+    #####:  883:                    flag = 0;
+    #####:  884:                    break;
+        -:  885:                }
+        -:  886:            }
+    #####:  887:            if(flag) return 0;
+    #####:  888:            for(k = i + 1; k < 128; k++)
+        -:  889:            {
+    #####:  890:                if((Mat.M[k][0] & idM64[i]) == idM64[i])
+        -:  891:                {
+    #####:  892:                    Mat.M[k][0] ^= Mat.M[i][0];
+    #####:  893:                    Mat.M[k][1] ^= Mat.M[i][1];
+        -:  894:                }
+        -:  895:            }
+        -:  896:        }
+        -:  897:    }
+    #####:  898:    for(i = 64; i < 128;i++)
+        -:  899:    {
+    #####:  900:        if((Mat.M[i][1] & idM64[i-64]) == idM64[i-64])
+        -:  901:        {
+    #####:  902:            for(j = i + 1; j < 128; j++)
+        -:  903:            {
+    #####:  904:                if((Mat.M[j][1] & idM64[i-64]) == idM64[i-64])
+        -:  905:                {
+    #####:  906:                    Mat.M[j][1] ^= Mat.M[i][1];
+        -:  907:                }
+        -:  908:            }
+        -:  909:        }
+        -:  910:        else
+        -:  911:        {
+    #####:  912:            flag = 1;
+    #####:  913:            for(j = i + 1; j < 128; j++)
+        -:  914:            {
+    #####:  915:                if((Mat.M[j][1] & idM64[i-64]) == idM64[i-64])
+        -:  916:                {
+    #####:  917:                    temp[1] = Mat.M[i][1];
+    #####:  918:                    Mat.M[i][1] = Mat.M[j][1];
+    #####:  919:                    Mat.M[j][1] = temp[1];
+    #####:  920:                    flag = 0;
+    #####:  921:                    break;
+        -:  922:                }
+        -:  923:            }
+    #####:  924:            if(flag) return 0;
+    #####:  925:            for(k = i + 1; k < 128; k++)
+        -:  926:            {
+    #####:  927:                if((Mat.M[k][1] & idM64[i-64]) == idM64[i-64])
+        -:  928:                {
+    #####:  929:                    Mat.M[k][1] ^= Mat.M[i][1];
+        -:  930:                }
+        -:  931:            }
+        -:  932:        }
+        -:  933:    }
+    #####:  934:    if(Mat.M[127][1] == idM64[63]) return 1;
+    #####:  935:    else return 0;
+        -:  936:}
+    #####:  937:void invsM4(M4 Mat, M4 *Mat_inv)//compute the 4*4 inverse matrix
+        -:  938:{
+        -:  939:    int i, j, k;
+        -:  940:    uint8_t temp;
+    #####:  941:    identityM4(Mat_inv);
+    #####:  942:    for(i = 0; i < 4; i++)
+        -:  943:    {
+    #####:  944:        if((Mat.M[i] & idM4[i]) == idM4[i])
+        -:  945:        {
+    #####:  946:            for(j = i + 1; j < 4; j++)
+        -:  947:            {
+    #####:  948:                if((Mat.M[j] & idM4[i]) == idM4[i])
+        -:  949:                {
+    #####:  950:                    Mat.M[j] ^= Mat.M[i];
+    #####:  951:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -:  952:                }
+        -:  953:            }
+        -:  954:        }
+        -:  955:        else
+        -:  956:        {
+    #####:  957:            for(j = i + 1; j < 4; j++)
+        -:  958:            {
+    #####:  959:                if((Mat.M[j] & idM4[i]) == idM4[i])
+        -:  960:                {
+    #####:  961:                    temp = Mat.M[i];
+    #####:  962:                    Mat.M[i] = Mat.M[j];
+    #####:  963:                    Mat.M[j] = temp;
+        -:  964:
+    #####:  965:                    temp = (*Mat_inv).M[i];
+    #####:  966:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####:  967:                    (*Mat_inv).M[j] = temp;
+    #####:  968:                    break;
+        -:  969:                }
+        -:  970:            }
+    #####:  971:            for(k = i + 1; k < 4; k++)
+        -:  972:            {
+    #####:  973:                if((Mat.M[k] & idM4[i]) == idM4[i])
+        -:  974:                {
+    #####:  975:                    Mat.M[k] ^= Mat.M[i];
+    #####:  976:                    (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -:  977:                }
+        -:  978:            }
+        -:  979:        }
+        -:  980:    }
+    #####:  981:    for(i = 3; i >= 0; i--)
+        -:  982:    {
+    #####:  983:        for(j = i - 1; j >= 0; j--)
+        -:  984:        {
+    #####:  985:            if((Mat.M[j] & idM4[i]) == idM4[i])
+        -:  986:            {
+    #####:  987:                Mat.M[j] ^= Mat.M[i];
+    #####:  988:                (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -:  989:            }
+        -:  990:        }
+        -:  991:    }
+    #####:  992:}
+    #####:  993:void invsM8(M8 Mat, M8 *Mat_inv)//compute the 8*8 inverse matrix
+        -:  994:{
+        -:  995:    int i, j, k;
+        -:  996:    uint8_t temp;
+    #####:  997:    identityM8(Mat_inv);
+    #####:  998:    for(i = 0; i < 8; i++)
+        -:  999:    {
+    #####: 1000:        if((Mat.M[i] & idM8[i]) == idM8[i])
+        -: 1001:        {
+    #####: 1002:            for(j = i + 1; j < 8; j++)
+        -: 1003:            {
+    #####: 1004:                if((Mat.M[j] & idM8[i]) == idM8[i])
+        -: 1005:                {
+    #####: 1006:                    Mat.M[j] ^= Mat.M[i];
+    #####: 1007:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1008:                }
+        -: 1009:            }
+        -: 1010:        }
+        -: 1011:        else
+        -: 1012:        {
+    #####: 1013:            for(j = i + 1; j < 8; j++)
+        -: 1014:            {
+    #####: 1015:                if((Mat.M[j] & idM8[i]) == idM8[i])
+        -: 1016:                {
+    #####: 1017:                    temp = Mat.M[i];
+    #####: 1018:                    Mat.M[i] = Mat.M[j];
+    #####: 1019:                    Mat.M[j] = temp;
+        -: 1020:
+    #####: 1021:                    temp = (*Mat_inv).M[i];
+    #####: 1022:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####: 1023:                    (*Mat_inv).M[j] = temp;
+    #####: 1024:                    break;
+        -: 1025:                }
+        -: 1026:            }
+    #####: 1027:            for(k = i + 1; k < 8; k++)
+        -: 1028:            {
+    #####: 1029:                if((Mat.M[k] & idM8[i]) == idM8[i])
+        -: 1030:                {
+    #####: 1031:                    Mat.M[k] ^= Mat.M[i];
+    #####: 1032:                    (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 1033:                }
+        -: 1034:            }
+        -: 1035:        }
+        -: 1036:    }
+    #####: 1037:    for(i = 7; i >= 0; i--)
+        -: 1038:    {
+    #####: 1039:        for(j = i - 1; j >= 0; j--)
+        -: 1040:        {
+    #####: 1041:            if((Mat.M[j] & idM8[i]) == idM8[i])
+        -: 1042:            {
+    #####: 1043:                Mat.M[j] ^= Mat.M[i];
+    #####: 1044:                (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1045:            }
+        -: 1046:        }
+        -: 1047:    }
+    #####: 1048:}
+    #####: 1049:void invsM16(M16 Mat, M16 *Mat_inv)//compute the 16*16 inverse matrix
+        -: 1050:{
+        -: 1051:    int i, j, k;
+        -: 1052:    uint16_t temp;
+    #####: 1053:    identityM16(Mat_inv);
+    #####: 1054:    for(i = 0; i < 16; i++)
+        -: 1055:    {
+    #####: 1056:        if((Mat.M[i] & idM16[i]) == idM16[i])
+        -: 1057:        {
+    #####: 1058:            for(j = i + 1; j < 16; j++)
+        -: 1059:            {
+    #####: 1060:                if((Mat.M[j] & idM16[i]) == idM16[i])
+        -: 1061:                {
+    #####: 1062:                    Mat.M[j] ^= Mat.M[i];
+    #####: 1063:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1064:                }
+        -: 1065:            }
+        -: 1066:        }
+        -: 1067:        else
+        -: 1068:        {
+    #####: 1069:            for(j = i + 1; j < 16; j++)
+        -: 1070:            {
+    #####: 1071:                if((Mat.M[j] & idM16[i]) == idM16[i])
+        -: 1072:                {
+    #####: 1073:                    temp = Mat.M[i];
+    #####: 1074:                    Mat.M[i] = Mat.M[j];
+    #####: 1075:                    Mat.M[j] = temp;
+        -: 1076:
+    #####: 1077:                    temp = (*Mat_inv).M[i];
+    #####: 1078:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####: 1079:                    (*Mat_inv).M[j] = temp;
+    #####: 1080:                    break;
+        -: 1081:                }
+        -: 1082:            }
+    #####: 1083:            for(k = i + 1; k < 16; k++)
+        -: 1084:            {
+    #####: 1085:                if((Mat.M[k] & idM16[i]) == idM16[i])
+        -: 1086:                {
+    #####: 1087:                    Mat.M[k] ^= Mat.M[i];
+    #####: 1088:                    (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 1089:                }
+        -: 1090:            }
+        -: 1091:        }
+        -: 1092:    }
+    #####: 1093:    for(i = 15; i >= 0; i--)
+        -: 1094:    {
+    #####: 1095:        for(j = i - 1; j >= 0; j--)
+        -: 1096:        {
+    #####: 1097:            if((Mat.M[j] & idM16[i]) == idM16[i])
+        -: 1098:            {
+    #####: 1099:                Mat.M[j] ^= Mat.M[i];
+    #####: 1100:                (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1101:            }
+        -: 1102:        }
+        -: 1103:    }
+    #####: 1104:}
+    #####: 1105:void invsM32(M32 Mat, M32 *Mat_inv)//compute the 32*32 inverse matrix
+        -: 1106:{
+        -: 1107:    int i, j, k;
+        -: 1108:    uint32_t temp;
+    #####: 1109:    identityM32(Mat_inv);
+    #####: 1110:    for(i = 0; i < 32; i++)
+        -: 1111:    {
+    #####: 1112:        if((Mat.M[i] & idM32[i]) == idM32[i])
+        -: 1113:        {
+    #####: 1114:            for(j = i + 1; j < 32; j++)
+        -: 1115:            {
+    #####: 1116:                if((Mat.M[j] & idM32[i]) == idM32[i])
+        -: 1117:                {
+    #####: 1118:                    Mat.M[j] ^= Mat.M[i];
+    #####: 1119:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1120:                }
+        -: 1121:            }
+        -: 1122:        }
+        -: 1123:        else
+        -: 1124:        {
+    #####: 1125:            for(j = i + 1; j < 32; j++)
+        -: 1126:            {
+    #####: 1127:                if((Mat.M[j] & idM32[i]) == idM32[i])
+        -: 1128:                {
+    #####: 1129:                    temp = Mat.M[i];
+    #####: 1130:                    Mat.M[i] = Mat.M[j];
+    #####: 1131:                    Mat.M[j] = temp;
+        -: 1132:
+    #####: 1133:                    temp = (*Mat_inv).M[i];
+    #####: 1134:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####: 1135:                    (*Mat_inv).M[j] = temp;
+    #####: 1136:                    break;
+        -: 1137:                }
+        -: 1138:            }
+    #####: 1139:            for(k = i + 1; k < 32; k++)
+        -: 1140:            {
+    #####: 1141:                if((Mat.M[k] & idM32[i]) == idM32[i])
+        -: 1142:                {
+    #####: 1143:                    Mat.M[k] ^= Mat.M[i];
+    #####: 1144:                    (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 1145:                }
+        -: 1146:            }
+        -: 1147:        }
+        -: 1148:    }
+    #####: 1149:    for(i = 31; i >= 0; i--)
+        -: 1150:    {
+    #####: 1151:        for(j = i - 1; j >= 0; j--)
+        -: 1152:        {
+    #####: 1153:            if((Mat.M[j] & idM32[i]) == idM32[i])
+        -: 1154:            {
+    #####: 1155:                Mat.M[j] ^= Mat.M[i];
+    #####: 1156:                (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1157:            }
+        -: 1158:        }
+        -: 1159:    }
+    #####: 1160:}
+    #####: 1161:void invsM64(M64 Mat, M64 *Mat_inv)//compute the 64*64 inverse matrix
+        -: 1162:{
+        -: 1163:    int i, j, k;
+        -: 1164:    uint64_t temp;
+    #####: 1165:    identityM64(Mat_inv);
+    #####: 1166:    for(i = 0; i < 64; i++)
+        -: 1167:    {
+    #####: 1168:        if((Mat.M[i] & idM64[i]) == idM64[i])
+        -: 1169:        {
+    #####: 1170:            for(j = i + 1; j < 64; j++)
+        -: 1171:            {
+    #####: 1172:                if((Mat.M[j] & idM64[i]) == idM64[i])
+        -: 1173:                {
+    #####: 1174:                    Mat.M[j] ^= Mat.M[i];
+    #####: 1175:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1176:                }
+        -: 1177:            }
+        -: 1178:        }
+        -: 1179:        else
+        -: 1180:        {
+    #####: 1181:            for(j = i + 1; j < 64; j++)
+        -: 1182:            {
+    #####: 1183:                if((Mat.M[j] & idM64[i]) == idM64[i])
+        -: 1184:                {
+    #####: 1185:                    temp = Mat.M[i];
+    #####: 1186:                    Mat.M[i] = Mat.M[j];
+    #####: 1187:                    Mat.M[j] = temp;
+        -: 1188:
+    #####: 1189:                    temp = (*Mat_inv).M[i];
+    #####: 1190:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####: 1191:                    (*Mat_inv).M[j] = temp;
+    #####: 1192:                    break;
+        -: 1193:                }
+        -: 1194:            }
+    #####: 1195:            for(k = i + 1; k < 64; k++)
+        -: 1196:            {
+    #####: 1197:                if((Mat.M[k] & idM64[i]) == idM64[i])
+        -: 1198:                {
+    #####: 1199:                    Mat.M[k] ^= Mat.M[i];
+    #####: 1200:                    (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 1201:                }
+        -: 1202:            }
+        -: 1203:        }
+        -: 1204:    }
+    #####: 1205:    for(i = 63; i >= 0; i--)
+        -: 1206:    {
+    #####: 1207:        for(j = i - 1; j >= 0; j--)
+        -: 1208:        {
+    #####: 1209:            if((Mat.M[j] & idM64[i]) == idM64[i])
+        -: 1210:            {
+    #####: 1211:                Mat.M[j] ^= Mat.M[i];
+    #####: 1212:                (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1213:            }
+        -: 1214:        }
+        -: 1215:    }
+    #####: 1216:}
+    #####: 1217:void invsM128(M128 Mat, M128 *Mat_inv)//compute the 128*128 inverse matrix
+        -: 1218:{
+        -: 1219:    int i, j, k;
+        -: 1220:    uint64_t temp[2];
+    #####: 1221:    identityM128(Mat_inv);
+    #####: 1222:    for(i = 0; i < 64; i++)
+        -: 1223:    {
+    #####: 1224:        if((Mat.M[i][0] & idM64[i]) == idM64[i])
+        -: 1225:        {
+    #####: 1226:            for(j = i + 1; j < 128; j++)
+        -: 1227:            {
+    #####: 1228:                if((Mat.M[j][0] & idM64[i]) == idM64[i])
+        -: 1229:                {
+    #####: 1230:                    Mat.M[j][0] ^= Mat.M[i][0];
+    #####: 1231:                    Mat.M[j][1] ^= Mat.M[i][1];
+        -: 1232:
+    #####: 1233:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 1234:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 1235:                }
+        -: 1236:            }
+        -: 1237:        }
+        -: 1238:        else
+        -: 1239:        {
+    #####: 1240:            for(j = i + 1; j < 128; j++)
+        -: 1241:            {
+    #####: 1242:                if((Mat.M[j][0] & idM64[i]) == idM64[i])
+        -: 1243:                {
+    #####: 1244:                    temp[0] = Mat.M[i][0];
+    #####: 1245:                    Mat.M[i][0] = Mat.M[j][0];
+    #####: 1246:                    Mat.M[j][0] = temp[0];
+        -: 1247:
+    #####: 1248:                    temp[1] = Mat.M[i][1];
+    #####: 1249:                    Mat.M[i][1] = Mat.M[j][1];
+    #####: 1250:                    Mat.M[j][1] = temp[1];
+        -: 1251:
+    #####: 1252:                    temp[0] = (*Mat_inv).M[i][0];
+    #####: 1253:                    (*Mat_inv).M[i][0] = (*Mat_inv).M[j][0];
+    #####: 1254:                    (*Mat_inv).M[j][0] = temp[0];
+        -: 1255:
+    #####: 1256:                    temp[1] = (*Mat_inv).M[i][1];
+    #####: 1257:                    (*Mat_inv).M[i][1] = (*Mat_inv).M[j][1];
+    #####: 1258:                    (*Mat_inv).M[j][1] = temp[1];
+    #####: 1259:                    break;
+        -: 1260:                }
+        -: 1261:            }
+    #####: 1262:            for(k = i + 1; k < 128; k++)
+        -: 1263:            {
+    #####: 1264:                if((Mat.M[k][0] & idM64[i]) == idM64[i])
+        -: 1265:                {
+    #####: 1266:                    Mat.M[k][0] ^= Mat.M[i][0];
+    #####: 1267:                    Mat.M[k][1] ^= Mat.M[i][1];
+        -: 1268:
+    #####: 1269:                    (*Mat_inv).M[k][0] ^= (*Mat_inv).M[i][0];
+    #####: 1270:                    (*Mat_inv).M[k][1] ^= (*Mat_inv).M[i][1];
+        -: 1271:                }
+        -: 1272:            }
+        -: 1273:        }
+        -: 1274:    }
+    #####: 1275:    for(i = 64; i < 128; i++)
+        -: 1276:    {
+    #####: 1277:        if((Mat.M[i][1] & idM64[i-64]) == idM64[i-64])
+        -: 1278:        {
+    #####: 1279:            for(j = i + 1; j < 128; j++)
+        -: 1280:            {
+    #####: 1281:                if((Mat.M[j][1] & idM64[i-64]) == idM64[i-64])
+        -: 1282:                {
+    #####: 1283:                    Mat.M[j][1] ^= Mat.M[i][1];
+        -: 1284:
+    #####: 1285:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 1286:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 1287:                }
+        -: 1288:            }
+        -: 1289:        }
+        -: 1290:        else
+        -: 1291:        {
+    #####: 1292:            for(j = i + 1; j < 128; j++)
+        -: 1293:            {
+    #####: 1294:                if((Mat.M[j][1] & idM64[i-64]) == idM64[i-64])
+        -: 1295:                {
+    #####: 1296:                    temp[1] = Mat.M[i][1];
+    #####: 1297:                    Mat.M[i][1] = Mat.M[j][1];
+    #####: 1298:                    Mat.M[j][1] = temp[1];
+        -: 1299:
+    #####: 1300:                    temp[0] = (*Mat_inv).M[i][0];
+    #####: 1301:                    (*Mat_inv).M[i][0] = (*Mat_inv).M[j][0];
+    #####: 1302:                    (*Mat_inv).M[j][0] = temp[0];
+        -: 1303:
+    #####: 1304:                    temp[1] = (*Mat_inv).M[i][1];
+    #####: 1305:                    (*Mat_inv).M[i][1] = (*Mat_inv).M[j][1];
+    #####: 1306:                    (*Mat_inv).M[j][1] = temp[1];
+    #####: 1307:                    break;
+        -: 1308:                }
+        -: 1309:            }
+    #####: 1310:            for(k = i + 1; k < 128; k++)
+        -: 1311:            {
+    #####: 1312:                if((Mat.M[k][1] & idM64[i-64]) == idM64[i-64])
+        -: 1313:                {
+    #####: 1314:                    Mat.M[k][1] ^= Mat.M[i][1];
+        -: 1315:
+    #####: 1316:                    (*Mat_inv).M[k][0] ^= (*Mat_inv).M[i][0];
+    #####: 1317:                    (*Mat_inv).M[k][1] ^= (*Mat_inv).M[i][1];
+        -: 1318:                }
+        -: 1319:            }
+        -: 1320:        }
+        -: 1321:    }
+    #####: 1322:    for(i = 127; i >= 64; i--)
+        -: 1323:    {
+    #####: 1324:        for(j = i - 1; j >= 0; j--)
+        -: 1325:        {
+    #####: 1326:            if((Mat.M[j][1] & idM64[i-64]) == idM64[i-64])
+        -: 1327:            {
+    #####: 1328:                Mat.M[j][1] ^= Mat.M[i][1];
+    #####: 1329:                (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 1330:                (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 1331:            }
+        -: 1332:        }
+        -: 1333:    }
+    #####: 1334:    for(i = 63; i >= 0; i--)
+        -: 1335:    {
+    #####: 1336:        for(j = i - 1; j >= 0; j--)
+        -: 1337:        {
+    #####: 1338:            if((Mat.M[j][0] & idM64[i]) == idM64[i])
+        -: 1339:            {
+    #####: 1340:                Mat.M[j][0] ^= Mat.M[i][0];
+    #####: 1341:                (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 1342:                (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 1343:            }
+        -: 1344:        }
+        -: 1345:    }
+    #####: 1346:}
+    #####: 1347:uint8_t affineU4(Aff4 aff, uint8_t arr)//4bits affine transformation
+        -: 1348:{
+        -: 1349:    V4 mul_vec, ans_vec;
+    #####: 1350:    mul_vec.V = arr;
+    #####: 1351:    MatMulVecM4(aff.Mat, mul_vec, &ans_vec);//mul
+    #####: 1352:    return ans_vec.V ^ aff.Vec.V;//add
+        -: 1353:}
+    #####: 1354:uint8_t affineU8(Aff8 aff, uint8_t arr)//8bits affine transformation
+        -: 1355:{
+        -: 1356:    V8 mul_vec, ans_vec;
+    #####: 1357:    mul_vec.V = arr;
+    #####: 1358:    MatMulVecM8(aff.Mat, mul_vec, &ans_vec);//mul
+    #####: 1359:    return ans_vec.V ^ aff.Vec.V;//add
+        -: 1360:}
+    #####: 1361:uint16_t affineU16(Aff16 aff, uint16_t arr)//16bits affine transformation
+        -: 1362:{
+        -: 1363:    V16 mul_vec, ans_vec;
+    #####: 1364:    mul_vec.V = arr;
+    #####: 1365:    MatMulVecM16(aff.Mat, mul_vec, &ans_vec);//mul
+    #####: 1366:    return ans_vec.V ^ aff.Vec.V;//add
+        -: 1367:}
+    #####: 1368:uint32_t affineU32(Aff32 aff, uint32_t arr)//32bits affine transformation
+        -: 1369:{
+        -: 1370:    V32 mul_vec, ans_vec;
+    #####: 1371:    mul_vec.V = arr;
+    #####: 1372:    MatMulVecM32(aff.Mat, mul_vec, &ans_vec);//mul
+    #####: 1373:    return ans_vec.V ^ aff.Vec.V;//add
+        -: 1374:}
+    #####: 1375:uint64_t affineU64(Aff64 aff, uint64_t arr)//64bits affine transformation
+        -: 1376:{
+        -: 1377:    V64 mul_vec, ans_vec;
+    #####: 1378:    mul_vec.V = arr;
+    #####: 1379:    MatMulVecM64(aff.Mat, mul_vec, &ans_vec);//mul
+    #####: 1380:    return ans_vec.V ^ aff.Vec.V;//add
+        -: 1381:}
+    #####: 1382:void affineU128(Aff128 aff, uint64_t arr[], uint64_t ans[])//128bits affine transformation
+        -: 1383:{
+        -: 1384:    V128 mul_vec, ans_vec;
+    #####: 1385:    mul_vec.V[0] = arr[0];
+    #####: 1386:    mul_vec.V[1] = arr[1];
+    #####: 1387:    MatMulVecM128(aff.Mat, mul_vec, &ans_vec);//mul
+    #####: 1388:    ans[0] = ans_vec.V[0] ^ aff.Vec.V[0];//add
+    #####: 1389:    ans[1] = ans_vec.V[1] ^ aff.Vec.V[1];
+    #####: 1390:}
+       32: 1391:int xorU4(uint8_t n)// 4bits internal xor
+        -: 1392:{
+       32: 1393:    if(xor[n]) return 1;
+       16: 1394:    else return 0;
+        -: 1395:}
+53849489452: 1396:int xorU8(uint8_t n)// uint8_t internal xor
+        -: 1397:{
+53849489452: 1398:    if(xor[n]) return 1;
+26926471165: 1399:    else return 0;
+        -: 1400:}
+39398408204: 1401:int xorU16(uint16_t n)// uint16_t internal xor
+        -: 1402:{
+39398408204: 1403:    uint8_t temp = 0;
+39398408204: 1404:    uint8_t* u = (uint8_t*)&n;
+39398408204: 1405:    temp = (*u) ^ (*(u+1));
+39398408204: 1406:    if(xorU8(temp)) return 1;
+19700930525: 1407:    else return 0;
+        -: 1408:}
+39398408198: 1409:int xorU32(uint32_t n)// uint32_t internal xor
+        -: 1410:{
+39398408198: 1411:    uint16_t temp = 0;
+39398408198: 1412:    uint16_t* u = (uint16_t*)&n;
+39398408198: 1413:    temp = (*u) ^ (*(u+1));
+39398408198: 1414:    if(xorU16(temp)) return 1;
+19700930519: 1415:    else return 0;
+        -: 1416:}
+    #####: 1417:int xorU64(uint64_t n)// uint64_t internal xor
+        -: 1418:{
+    #####: 1419:    uint32_t temp = 0;
+    #####: 1420:    uint32_t* u = (uint32_t*)&n;
+    #####: 1421:    temp = (*u) ^ (*(u+1));
+    #####: 1422:    if(xorU32(temp)) return 1;
+    #####: 1423:    else return 0;
+        -: 1424:}
+    #####: 1425:int xorU128(uint64_t n[])// uint128_t internal xor
+        -: 1426:{
+    #####: 1427:    uint64_t temp = 0;
+    #####: 1428:    temp = n[0] ^ n[1];
+    #####: 1429:    if(xorU64(temp)) return 1;
+    #####: 1430:    else return 0;
+        -: 1431:}
+       32: 1432:int HWU4(uint8_t n)// 4bits HW
+        -: 1433:{
+       32: 1434:    return HW[n];
+        -: 1435:}
+       68: 1436:int HWU8(uint8_t n)// uint8_t HW
+        -: 1437:{
+       68: 1438:    return HW[n];
+        -: 1439:}
+       18: 1440:int HWU16(uint16_t n)// uint16_t HW
+        -: 1441:{
+       18: 1442:    uint8_t* u = (uint8_t*)&n;
+       18: 1443:    return HWU8(*u) + HWU8(*(u+1));
+        -: 1444:}
+        6: 1445:int HWU32(uint32_t n)// uint32_t HW
+        -: 1446:{
+        6: 1447:    uint16_t* u = (uint16_t*)&n;
+        6: 1448:    return HWU16(*u) + HWU16(*(u+1));
+        -: 1449:}
+    #####: 1450:int HWU64(uint64_t n)// uint64_t HW
+        -: 1451:{
+    #####: 1452:    uint32_t* u = (uint32_t*)&n;
+    #####: 1453:    return HWU32(*u) + HWU32(*(u+1));
+        -: 1454:}
+    #####: 1455:int HWU128(uint64_t n[])// uint128_t HW
+        -: 1456:{
+    #####: 1457:    return HWU64(n[0]) + HWU64(n[1]);
+        -: 1458:}
+    #####: 1459:void printU8(uint8_t n)//printf uint8_t
+        -: 1460:{
+    #####: 1461:    printf("0x%x\n", n);
+    #####: 1462:}
+    #####: 1463:void printU16(uint16_t n)//printf uint16_t
+        -: 1464:{
+    #####: 1465:    printf("0x%x\n", n);
+    #####: 1466:}
+    #####: 1467:void printU32(uint32_t n)//printf uint32_t
+        -: 1468:{
+    #####: 1469:    printf("0x%x\n", n);
+    #####: 1470:}
+    #####: 1471:void printU64(uint64_t n)//printf uint64_t
+        -: 1472:{
+    #####: 1473:    printf("0x%x\n", n);
+    #####: 1474:}
+    #####: 1475:void printU128(uint64_t n[])//printf uint128_t
+        -: 1476:{
+    #####: 1477:    printf("0x%x ", n[0]);
+    #####: 1478:    printf("0x%x\n", n[1]);
+    #####: 1479:}
+    #####: 1480:void printbitM4(M4 Mat)//printf Matrix 4*4 in the form of bits 
+        -: 1481:{
+        -: 1482:    int i, j;
+        -: 1483:    uint8_t temp;
+    #####: 1484:    for(i = 0; i < 4; i++)
+        -: 1485:    {
+    #####: 1486:        temp = Mat.M[i];
+    #####: 1487:        for(j = 0; j < 4; j++)
+        -: 1488:        {
+    #####: 1489:            if(temp & 0x08) printf("%d ", 1);
+    #####: 1490:            else printf("%d ", 0);
+    #####: 1491:            temp = temp << 1;
+        -: 1492:        }
+    #####: 1493:        printf("\n");
+        -: 1494:    }
+    #####: 1495:    printf("\n");
+    #####: 1496:}
+    #####: 1497:void printbitM8(M8 Mat)//printf Matrix 8*8 in the form of bits 
+        -: 1498:{
+        -: 1499:    int i, j;
+        -: 1500:    uint8_t temp;
+    #####: 1501:    for(i = 0; i < 8; i++)
+        -: 1502:    {
+    #####: 1503:        temp = Mat.M[i];
+    #####: 1504:        for(j = 0; j < 8; j++)
+        -: 1505:        {
+    #####: 1506:            if(temp & 0x80) printf("%d ", 1);
+    #####: 1507:            else printf("%d ", 0);
+    #####: 1508:            temp = temp << 1;
+        -: 1509:        }
+    #####: 1510:        printf("\n");
+        -: 1511:    }
+    #####: 1512:    printf("\n");
+    #####: 1513:}
+    #####: 1514:void printbitM16(M16 Mat)//printf Matrix 16*16 in the form of bits 
+        -: 1515:{
+        -: 1516:    int i, j;
+        -: 1517:    uint16_t temp;
+    #####: 1518:    for(i = 0; i < 16; i++)
+        -: 1519:    {
+    #####: 1520:        temp = Mat.M[i];
+    #####: 1521:        for(j = 0; j < 16; j++)
+        -: 1522:        {
+    #####: 1523:            if(temp & 0x8000) printf("%d ", 1);
+    #####: 1524:            else printf("%d ", 0);
+    #####: 1525:            temp = temp << 1;
+        -: 1526:        }
+    #####: 1527:        printf("\n");
+        -: 1528:    }
+    #####: 1529:    printf("\n");
+    #####: 1530:}
+    #####: 1531:void printbitM32(M32 Mat)//printf Matrix 32*32 in the form of bits 
+        -: 1532:{
+        -: 1533:    int i, j;
+        -: 1534:    uint32_t temp;
+    #####: 1535:    for(i = 0; i < 32; i++)
+        -: 1536:    {
+    #####: 1537:        temp = Mat.M[i];
+    #####: 1538:        for(j = 0; j < 32; j++)
+        -: 1539:        {
+    #####: 1540:            if(temp & 0x80000000) printf("%d ", 1);
+    #####: 1541:            else printf("%d ", 0);
+    #####: 1542:            temp = temp << 1;
+        -: 1543:        }
+    #####: 1544:        printf("\n");
+        -: 1545:    }
+    #####: 1546:    printf("\n");
+    #####: 1547:}
+    #####: 1548:void printbitM64(M64 Mat)//printf Matrix 64*64 in the form of bits 
+        -: 1549:{
+        -: 1550:    int i, j;
+        -: 1551:    uint64_t temp;
+    #####: 1552:    for(i = 0; i < 64; i++)
+        -: 1553:    {
+    #####: 1554:        temp = Mat.M[i];
+    #####: 1555:        for(j = 0; j < 64; j++)
+        -: 1556:        {
+    #####: 1557:            if(temp & 0x8000000000000000) printf("%d ", 1);
+    #####: 1558:            else printf("%d ", 0);
+    #####: 1559:            temp = temp << 1;
+        -: 1560:        }
+    #####: 1561:        printf("\n");
+        -: 1562:    }
+    #####: 1563:    printf("\n");
+    #####: 1564:}
+    #####: 1565:void printbitM128(M128 Mat)//printf Matrix 128*128 in the form of bits 
+        -: 1566:{
+        -: 1567:    int i, j;
+        -: 1568:    uint64_t temp;
+    #####: 1569:    for(i = 0; i < 128; i++)
+        -: 1570:    {
+    #####: 1571:        temp = Mat.M[i][0];
+    #####: 1572:        for(j = 0; j < 64; j++)
+        -: 1573:        {
+    #####: 1574:            if(temp & 0x8000000000000000) printf("%d ", 1);
+    #####: 1575:            else printf("%d ", 0);
+    #####: 1576:            temp = temp << 1;
+        -: 1577:        }
+    #####: 1578:        temp = Mat.M[i][1];
+    #####: 1579:        for(j = 0; j < 64; j++)
+        -: 1580:        {
+    #####: 1581:            if(temp & 0x8000000000000000) printf("%d ", 1);
+    #####: 1582:            else printf("%d ", 0);
+    #####: 1583:            temp = temp << 1;
+        -: 1584:        }
+    #####: 1585:        printf("\n");
+        -: 1586:    }
+    #####: 1587:    printf("\n");
+    #####: 1588:}
+    #####: 1589:void VecAddVecV4(V4 Vec1, V4 Vec2, V4 *Vec)
+        -: 1590:{
+    #####: 1591:    (*Vec).V = Vec1.V ^ Vec2.V;
+    #####: 1592:}
+    #####: 1593:void VecAddVecV8(V8 Vec1, V8 Vec2, V8 *Vec)
+        -: 1594:{
+    #####: 1595:    (*Vec).V = Vec1.V ^ Vec2.V;
+    #####: 1596:}
+    #####: 1597:void VecAddVecV16(V16 Vec1, V16 Vec2, V16 *Vec)
+        -: 1598:{
+    #####: 1599:    (*Vec).V = Vec1.V ^ Vec2.V;
+    #####: 1600:}
+    #####: 1601:void VecAddVecV32(V32 Vec1, V32 Vec2, V32 *Vec)
+        -: 1602:{
+    #####: 1603:    (*Vec).V = Vec1.V ^ Vec2.V;
+    #####: 1604:}
+    #####: 1605:void VecAddVecV64(V64 Vec1, V64 Vec2, V64 *Vec)
+        -: 1606:{
+    #####: 1607:    (*Vec).V = Vec1.V ^ Vec2.V;
+    #####: 1608:}
+    #####: 1609:void VecAddVecV128(V128 Vec1, V128 Vec2, V128 *Vec)
+        -: 1610:{
+    #####: 1611:    (*Vec).V[0] = Vec1.V[0] ^ Vec2.V[0];
+    #####: 1612:    (*Vec).V[1] = Vec1.V[1] ^ Vec2.V[1];
+    #####: 1613:}
+    #####: 1614:uint8_t MatMulNumM4(M4 Mat, uint8_t n)//matrix * number -> number 4bits
+        -: 1615:{
+        -: 1616:    int i;
+    #####: 1617:    uint8_t temp = 0;
+    #####: 1618:    for(i = 0; i < 4; i++)
+        -: 1619:    {
+    #####: 1620:        if(xorU4(Mat.M[i] & n & 0x0f)) temp ^= idM4[i];
+        -: 1621:    }
+    #####: 1622:    return temp;
+        -: 1623:}
+1806385152: 1624:uint8_t MatMulNumM8(M8 Mat, uint8_t n)//matrix * number -> number 8bits
+        -: 1625:{
+        -: 1626:    int i;
+1806385152: 1627:    uint8_t temp = 0;
+16257466368: 1628:    for(i = 0; i < 8; i++)
+        -: 1629:    {
+14451081216: 1630:        if(xorU8(Mat.M[i] & n)) temp ^= idM8[i];
+        -: 1631:    }
+1806385152: 1632:    return temp;
+        -: 1633:}
+    #####: 1634:uint16_t MatMulNumM16(M16 Mat, uint16_t n)//matrix * number -> number 16bits
+        -: 1635:{
+        -: 1636:    int i;
+    #####: 1637:    uint16_t temp = 0;
+    #####: 1638:    for(i = 0; i < 16; i++)
+        -: 1639:    {
+    #####: 1640:        if(xorU16(Mat.M[i] & n)) temp ^= idM16[i];
+        -: 1641:    }
+    #####: 1642:    return temp;
+        -: 1643:}
+1231200256: 1644:uint32_t MatMulNumM32(M32 Mat, uint32_t n)//matrix * number -> number 32bits
+        -: 1645:{
+        -: 1646:    int i;
+1231200256: 1647:    uint32_t temp = 0;
+40629608448: 1648:    for(i = 0; i < 32; i++)
+        -: 1649:    {
+39398408192: 1650:        if(xorU32(Mat.M[i] & n)) temp ^= idM32[i];
+        -: 1651:    }
+1231200256: 1652:    return temp;
+        -: 1653:}
+    #####: 1654:uint64_t MatMulNumM64(M64 Mat, uint64_t n)//matrix * number -> number 64bits
+        -: 1655:{
+        -: 1656:    int i;
+    #####: 1657:    uint64_t temp = 0;
+    #####: 1658:    for(i = 0; i < 64; i++)
+        -: 1659:    {
+    #####: 1660:        if(xorU64(Mat.M[i] & n)) temp ^= idM64[i];
+        -: 1661:    }
+    #####: 1662:    return temp;
+        -: 1663:}
+    #####: 1664:void MatMulVecM4(M4 Mat, V4 Vec, V4 *ans)//matrix * vector -> vector 4*1
+        -: 1665:{
+        -: 1666:    int i;
+    #####: 1667:    initV4(ans);
+    #####: 1668:    for(i = 0; i < 4; i++)
+        -: 1669:    {
+    #####: 1670:        if(xorU4(Mat.M[i] & Vec.V & 0x0f)) (*ans).V ^= idM4[i];
+        -: 1671:    }
+    #####: 1672:}
+    #####: 1673:void MatMulVecM8(M8 Mat, V8 Vec, V8 *ans)//matrix * vector -> vector 8*1
+        -: 1674:{
+        -: 1675:    int i;
+    #####: 1676:    initV8(ans);
+    #####: 1677:    for(i = 0; i < 8; i++)
+        -: 1678:    {
+    #####: 1679:        if(xorU8(Mat.M[i] & Vec.V)) (*ans).V ^= idM8[i];
+        -: 1680:    }
+    #####: 1681:}
+    #####: 1682:void MatMulVecM16(M16 Mat, V16 Vec, V16 *ans)//matrix * vector -> vector 16*1
+        -: 1683:{
+        -: 1684:    int i;
+    #####: 1685:    initV16(ans);
+    #####: 1686:    for(i = 0; i < 16; i++)
+        -: 1687:    {
+    #####: 1688:        if(xorU16(Mat.M[i] & Vec.V)) (*ans).V ^= idM16[i];
+        -: 1689:    }
+    #####: 1690:}
+    #####: 1691:void MatMulVecM32(M32 Mat, V32 Vec, V32 *ans)//matrix * vector -> vector 32*1
+        -: 1692:{
+        -: 1693:    int i;
+    #####: 1694:    initV32(ans);
+    #####: 1695:    for(i = 0; i < 32; i++)
+        -: 1696:    {
+    #####: 1697:        if(xorU32(Mat.M[i] & Vec.V)) (*ans).V ^= idM32[i];
+        -: 1698:    }
+    #####: 1699:}
+    #####: 1700:void MatMulVecM64(M64 Mat, V64 Vec, V64 *ans)//matrix * vector -> vector 64*1
+        -: 1701:{
+        -: 1702:    int i;
+    #####: 1703:    initV64(ans);
+    #####: 1704:    for(i = 0; i < 64; i++)
+        -: 1705:    {
+    #####: 1706:        if(xorU64(Mat.M[i] & Vec.V)) (*ans).V ^= idM64[i];
+        -: 1707:    }
+    #####: 1708:}
+    #####: 1709:void MatMulVecM128(M128 Mat, V128 Vec, V128 *ans)//matrix * vector -> vector 128*1
+        -: 1710:{
+        -: 1711:    int i;
+    #####: 1712:    initV128(ans);
+        -: 1713:    uint64_t temp[2]; 
+    #####: 1714:    for(i = 0; i < 64; i++)
+        -: 1715:    {
+    #####: 1716:        temp[0] = Mat.M[i][0] & Vec.V[0];
+    #####: 1717:        temp[1] = Mat.M[i][1] & Vec.V[1];
+    #####: 1718:        if(xorU128(temp)) (*ans).V[0] ^= idM64[i];
+        -: 1719:    }
+    #####: 1720:    for(i = 64; i < 128; i++)
+        -: 1721:    {
+    #####: 1722:        temp[0] = Mat.M[i][0] & Vec.V[0];
+    #####: 1723:        temp[1] = Mat.M[i][1] & Vec.V[1];
+    #####: 1724:        if(xorU128(temp)) (*ans).V[1] ^= idM64[i-64];
+        -: 1725:    }
+    #####: 1726:}
+    #####: 1727:void genMatpairM4(M4 *Mat, M4 *Mat_inv)//generate 4*4 invertible matrix and its inverse matrix
+        -: 1728:{
+        -: 1729:    int i, j, t, k;
+        -: 1730:    int p, q;
+        -: 1731:    M4 tempMat;
+        -: 1732:    M4 resultMat;
+        -: 1733:    uint8_t temp;
+        -: 1734:    uint8_t trail[16][3];// generate trail
+    #####: 1735:    int flag = 0;
+    #####: 1736:    int times = 0;
+    #####: 1737:    int invertible = 1;
+    #####: 1738:    InitRandom((randseed++) ^ ((unsigned int)time(NULL))); 
+    #####: 1739:    identityM4(Mat);
+    #####: 1740:    identityM4(Mat_inv);  
+    #####: 1741:    randM4(&tempMat);
+    #####: 1742:    copyM4(tempMat, &resultMat);
+    #####: 1743:    for(i = 0; i < 4; i++)//diagonal = 1?
+        -: 1744:    {
+    #####: 1745:        if((tempMat.M[i] & idM4[i]) == idM4[i])
+        -: 1746:        {
+    #####: 1747:            for(j = i + 1; j < 4; j++)
+        -: 1748:            {
+    #####: 1749:                if((tempMat.M[j] & idM4[i]) == idM4[i])
+        -: 1750:                {
+    #####: 1751:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 1752:
+    #####: 1753:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1754:
+    #####: 1755:                    trail[times][0] = 1;
+    #####: 1756:                    trail[times][1] = j;
+    #####: 1757:                    trail[times][2] = i;
+    #####: 1758:                    times++;
+        -: 1759:                }
+        -: 1760:            }
+        -: 1761:        }
+        -: 1762:        else// swap to find 1
+        -: 1763:        {
+    #####: 1764:            flag = 1;
+    #####: 1765:            for(j = i + 1; j < 4; j++)
+        -: 1766:            {
+    #####: 1767:                if((tempMat.M[j] & idM4[i]) == idM4[i])
+        -: 1768:                {
+    #####: 1769:                    temp = tempMat.M[i];
+    #####: 1770:                    tempMat.M[i] = tempMat.M[j];
+    #####: 1771:                    tempMat.M[j] = temp;
+        -: 1772:
+    #####: 1773:                    flag = 0;
+        -: 1774:
+    #####: 1775:                    temp = (*Mat_inv).M[i];
+    #####: 1776:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####: 1777:                    (*Mat_inv).M[j] = temp;
+        -: 1778:
+    #####: 1779:                    trail[times][0] = 0;
+    #####: 1780:                    trail[times][1] = j;
+    #####: 1781:                    trail[times][2] = i;
+    #####: 1782:                    times++;
+    #####: 1783:                    break;
+        -: 1784:                }
+        -: 1785:            }
+    #####: 1786:            if(flag) //can not find 1 which means not invertible
+        -: 1787:            {
+    #####: 1788:                invertible = 0;
+    #####: 1789:                if (i < 3)
+        -: 1790:                {
+    #####: 1791:                    p = i + 1 + cus_random()%(3 - i);//swap
+    #####: 1792:                    temp = tempMat.M[p];
+    #####: 1793:                    tempMat.M[p] = tempMat.M[i];
+    #####: 1794:                    tempMat.M[i] = temp;
+    #####: 1795:                    temp = (*Mat_inv).M[p];
+    #####: 1796:                    (*Mat_inv).M[p] = (*Mat_inv).M[i];
+    #####: 1797:                    (*Mat_inv).M[i] = temp;
+    #####: 1798:                    trail[times][0] = 0;
+    #####: 1799:                    trail[times][1] = p;
+    #####: 1800:                    trail[times][2] = i;
+    #####: 1801:                    times++;
+    #####: 1802:                    for(t = i + 1; t < 4; t++)
+        -: 1803:                    {
+    #####: 1804:                        if(cus_random()%2)
+        -: 1805:                        {
+    #####: 1806:                            tempMat.M[t] ^= tempMat.M[i];
+    #####: 1807:                            (*Mat_inv).M[t] ^= (*Mat_inv).M[i];
+    #####: 1808:                            trail[times][0] = 1;
+    #####: 1809:                            trail[times][1] = t;
+    #####: 1810:                            trail[times][2] = i;
+    #####: 1811:                            times++;
+        -: 1812:                        }
+        -: 1813:                    }
+        -: 1814:                }
+        -: 1815:            }
+        -: 1816:            else //can still contiune
+        -: 1817:            {
+    #####: 1818:                for(k = i + 1; k < 4; k++)
+        -: 1819:                {
+    #####: 1820:                    if((tempMat.M[k] & idM4[i]) == idM4[i])
+        -: 1821:                    {
+    #####: 1822:                        tempMat.M[k] ^= tempMat.M[i];
+        -: 1823:
+    #####: 1824:                        (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 1825:
+    #####: 1826:                        trail[times][0] = 1;
+    #####: 1827:                        trail[times][1] = k;
+    #####: 1828:                        trail[times][2] = i;
+    #####: 1829:                        times++;
+        -: 1830:                    }
+        -: 1831:                }
+        -: 1832:            }
+        -: 1833:        }
+        -: 1834:    }
+    #####: 1835:    if(!invertible)//not invertible
+        -: 1836:    {
+    #####: 1837:        for(t = 3; t >= 0; t--)
+        -: 1838:        {
+    #####: 1839:            for(j = t - 1; j >= 0; j--)
+        -: 1840:            {
+    #####: 1841:                if((tempMat.M[j] & idM4[t]) == idM4[t])
+        -: 1842:                {
+    #####: 1843:                    tempMat.M[j] ^= tempMat.M[t];
+    #####: 1844:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[t];
+    #####: 1845:                    trail[times][0] = 1;
+    #####: 1846:                    trail[times][1] = j;
+    #####: 1847:                    trail[times][2] = t;
+    #####: 1848:                    times++;
+        -: 1849:                }
+        -: 1850:            }
+        -: 1851:        }
+        -: 1852:        
+    #####: 1853:        for(j = times - 1; j >= 0; j--)//generate inverse matrix
+        -: 1854:        {
+    #####: 1855:            if(trail[j][0])//add
+        -: 1856:            {
+    #####: 1857:                (*Mat).M[trail[j][1]] ^= (*Mat).M[trail[j][2]];
+        -: 1858:            }
+        -: 1859:            else//swap
+        -: 1860:            {
+    #####: 1861:                temp = (*Mat).M[trail[j][1]];
+    #####: 1862:                (*Mat).M[trail[j][1]] = (*Mat).M[trail[j][2]];
+    #####: 1863:                (*Mat).M[trail[j][2]] = temp;
+        -: 1864:            }   
+        -: 1865:        }
+        -: 1866:    }
+        -: 1867:    else//invertible 
+        -: 1868:    {
+    #####: 1869:        for(i = 3; i >= 0; i--)
+        -: 1870:        {
+    #####: 1871:            for(j = i - 1; j >= 0; j--)
+        -: 1872:            {
+    #####: 1873:                if((tempMat.M[j] & idM4[i]) == idM4[i])
+        -: 1874:                {
+    #####: 1875:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 1876:
+    #####: 1877:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1878:                }
+        -: 1879:            }
+        -: 1880:        }
+    #####: 1881:        copyM4(resultMat, Mat);
+        -: 1882:    }
+    #####: 1883:}
+    54912: 1884:void genMatpairM8(M8 *Mat, M8 *Mat_inv)//generate 8*8 invertible matrix and its inverse matrix
+        -: 1885:{
+        -: 1886:    int i, j, t, k;
+        -: 1887:    int p, q;
+        -: 1888:    M8 tempMat;
+        -: 1889:    M8 resultMat;
+        -: 1890:    uint8_t temp;
+        -: 1891:    uint8_t trail[64][3];// generate trail
+    54912: 1892:    int flag = 0;
+    54912: 1893:    int times = 0;
+    54912: 1894:    int invertible = 1;
+    54912: 1895:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    54912: 1896:    identityM8(Mat);
+    54912: 1897:    identityM8(Mat_inv);
+    54912: 1898:    randM8(&tempMat);
+    54912: 1899:    copyM8(tempMat, &resultMat);
+   494208: 1900:    for(i = 0; i < 8; i++)//diagonal = 1?
+        -: 1901:    {
+   439296: 1902:        if((tempMat.M[i] & idM8[i]) == idM8[i])
+        -: 1903:        {
+   987730: 1904:            for(j = i + 1; j < 8; j++)
+        -: 1905:            {
+   768181: 1906:                if((tempMat.M[j] & idM8[i]) == idM8[i])
+        -: 1907:                {
+   384287: 1908:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 1909:
+   384287: 1910:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 1911:
+   384287: 1912:                    trail[times][0]=1;
+   384287: 1913:                    trail[times][1]=j;
+   384287: 1914:                    trail[times][2]=i;
+   384287: 1915:                    times++;
+        -: 1916:                }
+        -: 1917:            }
+        -: 1918:        }
+        -: 1919:        else// swap to find 1
+        -: 1920:        {
+   219747: 1921:            flag = 1;
+   385164: 1922:            for(j = i + 1; j < 8; j++)
+        -: 1923:            {
+   330392: 1924:                if((tempMat.M[j] & idM8[i]) == idM8[i])
+        -: 1925:                {
+   164975: 1926:                    temp = tempMat.M[i];
+   164975: 1927:                    tempMat.M[i] = tempMat.M[j];
+   164975: 1928:                    tempMat.M[j] = temp;
+        -: 1929:
+   164975: 1930:                    flag=0;
+        -: 1931:
+   164975: 1932:                    temp = (*Mat_inv).M[i];
+   164975: 1933:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+   164975: 1934:                    (*Mat_inv).M[j] = temp;
+        -: 1935:
+   164975: 1936:                    trail[times][0] = 0;
+   164975: 1937:                    trail[times][1] = j;
+   164975: 1938:                    trail[times][2] = i;
+   164975: 1939:                    times++;
+   164975: 1940:                    break;
+        -: 1941:                }
+        -: 1942:            }
+   219747: 1943:            if(flag) //can not find 1 which means not invertible
+        -: 1944:            {
+    54772: 1945:                invertible = 0;
+    54772: 1946:                if (i < 7)
+        -: 1947:                {
+    27349: 1948:                    p = i + 1 + cus_random()%(7 - i);//swap
+    27349: 1949:                    temp = tempMat.M[p];
+    27349: 1950:                    tempMat.M[p] = tempMat.M[i];
+    27349: 1951:                    tempMat.M[i] = temp;
+    27349: 1952:                    temp = (*Mat_inv).M[p];
+    27349: 1953:                    (*Mat_inv).M[p] = (*Mat_inv).M[i];
+    27349: 1954:                    (*Mat_inv).M[i] = temp;
+    27349: 1955:                    trail[times][0] = 0;
+    27349: 1956:                    trail[times][1] = p;
+    27349: 1957:                    trail[times][2] = i;
+    27349: 1958:                    times++;
+    80511: 1959:                    for(t = i + 1; t < 8; t++)
+        -: 1960:                    {
+    53162: 1961:                        if(cus_random()%2)
+        -: 1962:                        {
+    26601: 1963:                            tempMat.M[t] ^= tempMat.M[i];
+    26601: 1964:                            (*Mat_inv).M[t] ^= (*Mat_inv).M[i];
+    26601: 1965:                            trail[times][0] = 1;
+    26601: 1966:                            trail[times][1] = t;
+    26601: 1967:                            trail[times][2] = i;
+    26601: 1968:                            times++;
+        -: 1969:                        }
+        -: 1970:                    }
+        -: 1971:                }
+        -: 1972:            }
+        -: 1973:            else //can still contiune
+        -: 1974:            {
+   881168: 1975:                for(k = i + 1; k < 8; k++)
+        -: 1976:                {
+   716193: 1977:                    if((tempMat.M[k] & idM8[i]) == idM8[i])
+        -: 1978:                    {
+   218663: 1979:                        tempMat.M[k] ^= tempMat.M[i];
+        -: 1980:
+   218663: 1981:                        (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 1982:
+   218663: 1983:                        trail[times][0] = 1;
+   218663: 1984:                        trail[times][1] = k;
+   218663: 1985:                        trail[times][2] = i;
+   218663: 1986:                        times++;
+        -: 1987:                    }
+        -: 1988:                }
+        -: 1989:            }
+        -: 1990:        }
+        -: 1991:    }
+    54912: 1992:    if(!invertible)//not invertible
+        -: 1993:    {
+   351756: 1994:        for(t = 7; t >= 0; t--)
+        -: 1995:        {
+  1407024: 1996:            for(j = t - 1; j >= 0; j--)
+        -: 1997:            {
+  1094352: 1998:                if((tempMat.M[j] & idM8[t]) == idM8[t])
+        -: 1999:                {
+   547535: 2000:                    tempMat.M[j] ^= tempMat.M[t];
+   547535: 2001:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[t];
+   547535: 2002:                    trail[times][0] = 1;
+   547535: 2003:                    trail[times][1] = j;
+   547535: 2004:                    trail[times][2] = t;
+   547535: 2005:                    times++;
+        -: 2006:                }
+        -: 2007:            }
+        -: 2008:        }
+        -: 2009:        
+  1178096: 2010:        for(j = times - 1; j >= 0; j--)//generate inverse matrix
+        -: 2011:        {
+  1139012: 2012:            if(trail[j][0])//add
+        -: 2013:            {
+   997396: 2014:                (*Mat).M[trail[j][1]] ^= (*Mat).M[trail[j][2]];
+        -: 2015:            }
+        -: 2016:            else//swap
+        -: 2017:            {
+   141616: 2018:                temp = (*Mat).M[trail[j][1]];
+   141616: 2019:                (*Mat).M[trail[j][1]] = (*Mat).M[trail[j][2]];
+   141616: 2020:                (*Mat).M[trail[j][2]] = temp;
+        -: 2021:            }   
+        -: 2022:        }
+        -: 2023:    }
+        -: 2024:    else//invertible 
+        -: 2025:    {
+   142452: 2026:        for(i = 7; i >= 0; i--)
+        -: 2027:        {
+   569808: 2028:            for(j = i - 1; j >= 0; j--)
+        -: 2029:            {
+   443184: 2030:                if((tempMat.M[j] & idM8[i]) == idM8[i])
+        -: 2031:                {
+   222033: 2032:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 2033:
+   222033: 2034:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 2035:                }
+        -: 2036:            }
+        -: 2037:        }
+    15828: 2038:        copyM8(resultMat, Mat);
+        -: 2039:    }
+    54912: 2040:}
+    #####: 2041:void genMatpairM16(M16 *Mat, M16 *Mat_inv)//generate 16*16 invertible matrix and its inverse matrix
+        -: 2042:{
+        -: 2043:    int i, j, t, k;
+        -: 2044:    int p, q;
+        -: 2045:    M16 tempMat;
+        -: 2046:    M16 resultMat;
+        -: 2047:    uint16_t temp;
+        -: 2048:    uint8_t trail[256][3];// generate trail
+    #####: 2049:    int flag = 0;
+    #####: 2050:    int times = 0;
+    #####: 2051:    int invertible = 1;
+    #####: 2052:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    #####: 2053:    identityM16(Mat);
+    #####: 2054:    identityM16(Mat_inv);   
+    #####: 2055:    randM16(&tempMat);
+    #####: 2056:    copyM16(tempMat, &resultMat);   
+    #####: 2057:    for(i = 0; i < 16; i++)//diagonal = 1?
+        -: 2058:    {
+    #####: 2059:        if((tempMat.M[i] & idM16[i]) == idM16[i])
+        -: 2060:        {
+    #####: 2061:            for(j = i + 1; j < 16; j++)
+        -: 2062:            {
+    #####: 2063:                if((tempMat.M[j] & idM16[i]) == idM16[i])
+        -: 2064:                {
+    #####: 2065:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 2066:
+    #####: 2067:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 2068:
+    #####: 2069:                    trail[times][0] = 1;
+    #####: 2070:                    trail[times][1] = j;
+    #####: 2071:                    trail[times][2] = i;
+    #####: 2072:                    times++;
+        -: 2073:                }
+        -: 2074:            }
+        -: 2075:        }
+        -: 2076:        else// swap to find 1
+        -: 2077:        {
+    #####: 2078:            flag = 1;
+    #####: 2079:            for(j = i + 1; j < 16; j++)
+        -: 2080:            {
+    #####: 2081:                if((tempMat.M[j] & idM16[i]) == idM16[i])
+        -: 2082:                {
+    #####: 2083:                    temp = tempMat.M[i];
+    #####: 2084:                    tempMat.M[i] = tempMat.M[j];
+    #####: 2085:                    tempMat.M[j] = temp;
+        -: 2086:
+    #####: 2087:                    flag = 0;
+        -: 2088:
+    #####: 2089:                    temp = (*Mat_inv).M[i];
+    #####: 2090:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####: 2091:                    (*Mat_inv).M[j] = temp;
+        -: 2092:
+    #####: 2093:                    trail[times][0] = 0;
+    #####: 2094:                    trail[times][1] = j;
+    #####: 2095:                    trail[times][2] = i;
+    #####: 2096:                    times++;
+    #####: 2097:                    break;
+        -: 2098:                }
+        -: 2099:            }
+    #####: 2100:            if(flag) //can not find 1 which means not invertible
+        -: 2101:            {
+    #####: 2102:                invertible = 0;
+    #####: 2103:                if (i < 15)
+        -: 2104:                {
+    #####: 2105:                    p = i + 1 + cus_random()%(15 - i);//swap
+    #####: 2106:                    temp = tempMat.M[p];
+    #####: 2107:                    tempMat.M[p] = tempMat.M[i];
+    #####: 2108:                    tempMat.M[i] = temp;
+    #####: 2109:                    temp = (*Mat_inv).M[p];
+    #####: 2110:                    (*Mat_inv).M[p] = (*Mat_inv).M[i];
+    #####: 2111:                    (*Mat_inv).M[i] = temp;
+    #####: 2112:                    trail[times][0] = 0;
+    #####: 2113:                    trail[times][1] = p;
+    #####: 2114:                    trail[times][2] = i;
+    #####: 2115:                    times++;
+    #####: 2116:                    for(t = i + 1; t < 16; t++)
+        -: 2117:                    {
+    #####: 2118:                        if(cus_random()%2)
+        -: 2119:                        {
+    #####: 2120:                            tempMat.M[t] ^= tempMat.M[i];
+    #####: 2121:                            (*Mat_inv).M[t] ^= (*Mat_inv).M[i];
+    #####: 2122:                            trail[times][0] = 1;
+    #####: 2123:                            trail[times][1] = t;
+    #####: 2124:                            trail[times][2] = i;
+    #####: 2125:                            times++;
+        -: 2126:                        }
+        -: 2127:                    }
+        -: 2128:                }
+        -: 2129:            }
+        -: 2130:            else //can still contiune
+        -: 2131:            {
+    #####: 2132:                for(k = i + 1; k < 16; k++)
+        -: 2133:                {
+    #####: 2134:                    if((tempMat.M[k] & idM16[i]) == idM16[i])
+        -: 2135:                    {
+    #####: 2136:                        tempMat.M[k] ^= tempMat.M[i];
+        -: 2137:
+    #####: 2138:                        (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 2139:
+    #####: 2140:                        trail[times][0] = 1;
+    #####: 2141:                        trail[times][1] = k;
+    #####: 2142:                        trail[times][2] = i;
+    #####: 2143:                        times++;
+        -: 2144:                    }
+        -: 2145:                }
+        -: 2146:            }
+        -: 2147:        }
+        -: 2148:    }
+    #####: 2149:    if(!invertible)//not invertible
+        -: 2150:    {
+    #####: 2151:        for(t = 15; t >= 0; t--)
+        -: 2152:        {
+    #####: 2153:            for(j = t - 1; j >= 0; j--)
+        -: 2154:            {
+    #####: 2155:                if((tempMat.M[j] & idM16[t]) == idM16[t])
+        -: 2156:                {
+    #####: 2157:                    tempMat.M[j] ^= tempMat.M[t];
+    #####: 2158:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[t];
+    #####: 2159:                    trail[times][0] = 1;
+    #####: 2160:                    trail[times][1] = j;
+    #####: 2161:                    trail[times][2] = t;
+    #####: 2162:                    times++;
+        -: 2163:                }
+        -: 2164:            }
+        -: 2165:        }
+        -: 2166:        
+    #####: 2167:        for(j = times - 1; j >= 0; j--)//generate inverse matrix
+        -: 2168:        {
+    #####: 2169:            if(trail[j][0])//add
+        -: 2170:            {
+    #####: 2171:                (*Mat).M[trail[j][1]] ^= (*Mat).M[trail[j][2]];
+        -: 2172:            }
+        -: 2173:            else//swap
+        -: 2174:            {
+    #####: 2175:                temp = (*Mat).M[trail[j][1]];
+    #####: 2176:                (*Mat).M[trail[j][1]] = (*Mat).M[trail[j][2]];
+    #####: 2177:                (*Mat).M[trail[j][2]] = temp;
+        -: 2178:            }   
+        -: 2179:        }
+        -: 2180:    }
+        -: 2181:    else//invertible 
+        -: 2182:    {
+    #####: 2183:        for(i = 15; i >= 0; i--)
+        -: 2184:        {
+    #####: 2185:            for(j = i - 1; j >= 0; j--)
+        -: 2186:            {
+    #####: 2187:                if((tempMat.M[j] & idM16[i]) == idM16[i])
+        -: 2188:                {
+    #####: 2189:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 2190:
+    #####: 2191:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 2192:                }
+        -: 2193:            }
+        -: 2194:        }
+    #####: 2195:        copyM16(resultMat, Mat);
+        -: 2196:    }
+    #####: 2197:}
+    10296: 2198:void genMatpairM32(M32 *Mat, M32 *Mat_inv)//generate 32*32 invertible matrix and its inverse matrix
+        -: 2199:{
+        -: 2200:    int i, j, t, k;
+        -: 2201:    int p, q;
+        -: 2202:    M32 tempMat;
+        -: 2203:    M32 resultMat;
+        -: 2204:    uint32_t temp;
+        -: 2205:    uint8_t trail[1024][3];// generate trail
+    10296: 2206:    int flag = 0;
+    10296: 2207:    int times = 0;
+    10296: 2208:    int invertible = 1;
+    10296: 2209:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    10296: 2210:    identityM32(Mat);
+    10296: 2211:    identityM32(Mat_inv);
+    10296: 2212:    randM32(&tempMat);
+    10296: 2213:    copyM32(tempMat, &resultMat);
+   339768: 2214:    for(i = 0; i < 32; i++)//diagonal = 1?
+        -: 2215:    {
+   329472: 2216:        if((tempMat.M[i] & idM32[i]) == idM32[i])
+        -: 2217:        {
+  2713459: 2218:            for(j = i + 1; j < 32; j++)
+        -: 2219:            {
+  2549209: 2220:                if((tempMat.M[j] & idM32[i]) == idM32[i])
+        -: 2221:                {
+  1274734: 2222:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 2223:
+  1274734: 2224:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 2225:
+  1274734: 2226:                    trail[times][0] = 1;
+  1274734: 2227:                    trail[times][1] = j;
+  1274734: 2228:                    trail[times][2] = i;
+  1274734: 2229:                    times++;
+        -: 2230:                }
+        -: 2231:            }
+        -: 2232:        }
+        -: 2233:        else// swap to find 1
+        -: 2234:        {
+   165222: 2235:            flag = 1;
+   320563: 2236:            for(j = i + 1; j < 32; j++)
+        -: 2237:            {
+   310157: 2238:                if((tempMat.M[j] & idM32[i]) == idM32[i])
+        -: 2239:                {
+   154816: 2240:                    temp = tempMat.M[i];
+   154816: 2241:                    tempMat.M[i] = tempMat.M[j];
+   154816: 2242:                    tempMat.M[j] = temp;
+        -: 2243:
+   154816: 2244:                    flag=0;
+        -: 2245:
+   154816: 2246:                    temp = (*Mat_inv).M[i];
+   154816: 2247:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+   154816: 2248:                    (*Mat_inv).M[j] = temp;
+        -: 2249:
+   154816: 2250:                    trail[times][0] = 0;
+   154816: 2251:                    trail[times][1] = j;
+   154816: 2252:                    trail[times][2] = i;
+   154816: 2253:                    times++;
+   154816: 2254:                    break;
+        -: 2255:                }
+        -: 2256:            }
+   165222: 2257:            if(flag) //can not find 1 which means not invertible
+        -: 2258:            {
+    10406: 2259:                invertible = 0;
+    10406: 2260:                if (i < 31)
+        -: 2261:                {
+     5240: 2262:                    p = i + 1 + cus_random()%(31 - i);//swap
+     5240: 2263:                    temp = tempMat.M[p];
+     5240: 2264:                    tempMat.M[p] = tempMat.M[i];
+     5240: 2265:                    tempMat.M[i] = temp;
+     5240: 2266:                    temp = (*Mat_inv).M[p];
+     5240: 2267:                    (*Mat_inv).M[p] = (*Mat_inv).M[i];
+     5240: 2268:                    (*Mat_inv).M[i] = temp;
+     5240: 2269:                    trail[times][0] = 0;
+     5240: 2270:                    trail[times][1] = p;
+     5240: 2271:                    trail[times][2] = i;
+     5240: 2272:                    times++;
+    15886: 2273:                    for(t = i + 1; t < 32; t++)
+        -: 2274:                    {
+    10646: 2275:                        if(cus_random()%2)
+        -: 2276:                        {
+     5362: 2277:                            tempMat.M[t] ^= tempMat.M[i];
+     5362: 2278:                            (*Mat_inv).M[t] ^= (*Mat_inv).M[i];
+     5362: 2279:                            trail[times][0] = 1;
+     5362: 2280:                            trail[times][1] = t;
+     5362: 2281:                            trail[times][2] = i;
+     5362: 2282:                            times++;
+        -: 2283:                        }
+        -: 2284:                    }
+        -: 2285:                }
+        -: 2286:            }
+        -: 2287:            else //can still contiune
+        -: 2288:            {
+  2701777: 2289:                for(k = i + 1; k < 32; k++)
+        -: 2290:                {
+  2546961: 2291:                    if((tempMat.M[k] & idM32[i]) == idM32[i])
+        -: 2292:                    {
+  1124190: 2293:                        tempMat.M[k] ^= tempMat.M[i];
+        -: 2294:
+  1124190: 2295:                        (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 2296:
+  1124190: 2297:                        trail[times][0] = 1;
+  1124190: 2298:                        trail[times][1] = k;
+  1124190: 2299:                        trail[times][2] = i;
+  1124190: 2300:                        times++;
+        -: 2301:                    }
+        -: 2302:                }
+        -: 2303:            }
+        -: 2304:        }
+        -: 2305:    }
+    10296: 2306:    if(!invertible)//not invertible
+        -: 2307:    {
+   243474: 2308:        for(t = 31; t >= 0; t--)
+        -: 2309:        {
+  3895584: 2310:            for(j = t - 1; j >= 0; j--)
+        -: 2311:            {
+  3659488: 2312:                if((tempMat.M[j] & idM32[t]) == idM32[t])
+        -: 2313:                {
+  1829380: 2314:                    tempMat.M[j] ^= tempMat.M[t];
+  1829380: 2315:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[t];
+  1829380: 2316:                    trail[times][0] = 1;
+  1829380: 2317:                    trail[times][1] = j;
+  1829380: 2318:                    trail[times][2] = t;
+  1829380: 2319:                    times++;
+        -: 2320:                }
+        -: 2321:            }
+        -: 2322:        }
+        -: 2323:        
+  3674895: 2324:        for(j = times - 1; j >= 0; j--)//generate inverse matrix
+        -: 2325:        {
+  3667517: 2326:            if(trail[j][0])//add
+        -: 2327:            {
+  3551997: 2328:                (*Mat).M[trail[j][1]] ^= (*Mat).M[trail[j][2]];
+        -: 2329:            }
+        -: 2330:            else//swap
+        -: 2331:            {
+   115520: 2332:                temp = (*Mat).M[trail[j][1]];
+   115520: 2333:                (*Mat).M[trail[j][1]] = (*Mat).M[trail[j][2]];
+   115520: 2334:                (*Mat).M[trail[j][2]] = temp;
+        -: 2335:            }   
+        -: 2336:        }
+        -: 2337:    }
+        -: 2338:    else//invertible 
+        -: 2339:    {
+    96294: 2340:        for(i = 31; i >= 0; i--)
+        -: 2341:        {
+  1540704: 2342:            for(j = i - 1; j >= 0; j--)
+        -: 2343:            {
+  1447328: 2344:                if((tempMat.M[j] & idM32[i]) == idM32[i])
+        -: 2345:                {
+   723409: 2346:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 2347:
+   723409: 2348:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 2349:                }
+        -: 2350:            }
+        -: 2351:        }
+     2918: 2352:        copyM32(resultMat, Mat);
+        -: 2353:    }
+    10296: 2354:}
+    #####: 2355:void genMatpairM64(M64 *Mat, M64 *Mat_inv)//generate 64*64 invertible matrix and its inverse matrix
+        -: 2356:{
+        -: 2357:    int i, j, t, k;
+        -: 2358:    int p, q;
+        -: 2359:    M64 tempMat;
+        -: 2360:    M64 resultMat;
+        -: 2361:    uint64_t temp;
+        -: 2362:    uint8_t trail[4096][3];// generate trail
+    #####: 2363:    int flag = 0;
+    #####: 2364:    int times = 0;
+    #####: 2365:    int invertible = 1;
+    #####: 2366:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    #####: 2367:    identityM64(Mat);
+    #####: 2368:    identityM64(Mat_inv);
+    #####: 2369:    randM64(&tempMat);
+    #####: 2370:    copyM64(tempMat, &resultMat);
+    #####: 2371:    for(i = 0; i < 64; i++)//diagonal = 1?
+        -: 2372:    {
+    #####: 2373:        if((tempMat.M[i] & idM64[i]) == idM64[i])
+        -: 2374:        {
+    #####: 2375:            for(j = i + 1; j < 64; j++)
+        -: 2376:            {
+    #####: 2377:                if((tempMat.M[j] & idM64[i]) == idM64[i])
+        -: 2378:                {
+    #####: 2379:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 2380:
+    #####: 2381:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 2382:
+    #####: 2383:                    trail[times][0] = 1;
+    #####: 2384:                    trail[times][1] = j;
+    #####: 2385:                    trail[times][2] = i;
+    #####: 2386:                    times++;
+        -: 2387:                }
+        -: 2388:            }
+        -: 2389:        }
+        -: 2390:        else// swap to find 1
+        -: 2391:        {
+    #####: 2392:            flag = 1;
+    #####: 2393:            for(j = i + 1; j < 64; j++)
+        -: 2394:            {
+    #####: 2395:                if((tempMat.M[j] & idM64[i]) == idM64[i])
+        -: 2396:                {
+    #####: 2397:                    temp = tempMat.M[i];
+    #####: 2398:                    tempMat.M[i] = tempMat.M[j];
+    #####: 2399:                    tempMat.M[j] = temp;
+        -: 2400:
+    #####: 2401:                    flag = 0;
+        -: 2402:
+    #####: 2403:                    temp = (*Mat_inv).M[i];
+    #####: 2404:                    (*Mat_inv).M[i] = (*Mat_inv).M[j];
+    #####: 2405:                    (*Mat_inv).M[j] = temp;
+        -: 2406:
+    #####: 2407:                    trail[times][0] = 0;
+    #####: 2408:                    trail[times][1] = j;
+    #####: 2409:                    trail[times][2] = i;
+    #####: 2410:                    times++;
+    #####: 2411:                    break;
+        -: 2412:                }
+        -: 2413:            }
+    #####: 2414:            if(flag) //can not find 1 which means not invertible
+        -: 2415:            {
+    #####: 2416:                invertible = 0;
+    #####: 2417:                if (i < 63)
+        -: 2418:                {
+    #####: 2419:                    p = i + 1 + cus_random()%(63 - i);//swap
+    #####: 2420:                    temp = tempMat.M[p];
+    #####: 2421:                    tempMat.M[p] = tempMat.M[i];
+    #####: 2422:                    tempMat.M[i] = temp;
+    #####: 2423:                    temp = (*Mat_inv).M[p];
+    #####: 2424:                    (*Mat_inv).M[p] = (*Mat_inv).M[i];
+    #####: 2425:                    (*Mat_inv).M[i] = temp;
+    #####: 2426:                    trail[times][0] = 0;
+    #####: 2427:                    trail[times][1] = p;
+    #####: 2428:                    trail[times][2] = i;
+    #####: 2429:                    times++;
+    #####: 2430:                    for(t = i + 1; t < 64; t++)
+        -: 2431:                    {
+    #####: 2432:                        if(cus_random()%2)
+        -: 2433:                        {
+    #####: 2434:                            tempMat.M[t] ^= tempMat.M[i];
+    #####: 2435:                            (*Mat_inv).M[t] ^= (*Mat_inv).M[i];
+    #####: 2436:                            trail[times][0] = 1;
+    #####: 2437:                            trail[times][1] = t;
+    #####: 2438:                            trail[times][2] = i;
+    #####: 2439:                            times++;
+        -: 2440:                        }
+        -: 2441:                    }
+        -: 2442:                }
+        -: 2443:            }
+        -: 2444:            else //can still contiune
+        -: 2445:            {
+    #####: 2446:                for(k = i + 1; k < 64; k++)
+        -: 2447:                {
+    #####: 2448:                    if((tempMat.M[k] & idM64[i]) == idM64[i])
+        -: 2449:                    {
+    #####: 2450:                        tempMat.M[k] ^= tempMat.M[i];
+        -: 2451:
+    #####: 2452:                        (*Mat_inv).M[k] ^= (*Mat_inv).M[i];
+        -: 2453:
+    #####: 2454:                        trail[times][0] = 1;
+    #####: 2455:                        trail[times][1] = k;
+    #####: 2456:                        trail[times][2] = i;
+    #####: 2457:                        times++;
+        -: 2458:                    }
+        -: 2459:                }
+        -: 2460:            }
+        -: 2461:        }
+        -: 2462:    }
+    #####: 2463:    if(!invertible)//not invertible
+        -: 2464:    {
+    #####: 2465:        for(t = 63; t >= 0; t--)
+        -: 2466:        {
+    #####: 2467:            for(j = t - 1; j >= 0; j--)
+        -: 2468:            {
+    #####: 2469:                if((tempMat.M[j] & idM64[t]) == idM64[t])
+        -: 2470:                {
+    #####: 2471:                    tempMat.M[j] ^= tempMat.M[t];
+    #####: 2472:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[t];
+    #####: 2473:                    trail[times][0] = 1;
+    #####: 2474:                    trail[times][1] = j;
+    #####: 2475:                    trail[times][2] = t;
+    #####: 2476:                    times++;
+        -: 2477:                }
+        -: 2478:            }
+        -: 2479:        }
+        -: 2480:        
+    #####: 2481:        for(j = times - 1; j >= 0; j--)//generate inverse matrix
+        -: 2482:        {
+    #####: 2483:            if(trail[j][0])//add
+        -: 2484:            {
+    #####: 2485:                (*Mat).M[trail[j][1]] ^= (*Mat).M[trail[j][2]];
+        -: 2486:            }
+        -: 2487:            else//swap
+        -: 2488:            {
+    #####: 2489:                temp = (*Mat).M[trail[j][1]];
+    #####: 2490:                (*Mat).M[trail[j][1]] = (*Mat).M[trail[j][2]];
+    #####: 2491:                (*Mat).M[trail[j][2]] = temp;
+        -: 2492:            }   
+        -: 2493:        }
+        -: 2494:    }
+        -: 2495:    else//invertible 
+        -: 2496:    {
+    #####: 2497:        for(i = 63; i >= 0; i--)
+        -: 2498:        {
+    #####: 2499:            for(j = i - 1; j >= 0; j--)
+        -: 2500:            {
+    #####: 2501:                if((tempMat.M[j] & idM64[i]) == idM64[i])
+        -: 2502:                {
+    #####: 2503:                    tempMat.M[j] ^= tempMat.M[i];
+        -: 2504:
+    #####: 2505:                    (*Mat_inv).M[j] ^= (*Mat_inv).M[i];
+        -: 2506:                }
+        -: 2507:            }
+        -: 2508:        }
+    #####: 2509:        copyM64(resultMat, Mat);
+        -: 2510:    }
+    #####: 2511:}
+    #####: 2512:void genMatpairM128(M128 *Mat, M128 *Mat_inv)//generate 128*128 invertible matrix and its inverse matrix
+        -: 2513:{
+        -: 2514:    int i, j, t, k;
+        -: 2515:    int p, q;
+        -: 2516:    M128 tempMat;
+        -: 2517:    M128 resultMat;
+        -: 2518:    uint64_t temp;
+        -: 2519:    uint8_t trail[16384][3];// generate trail
+    #####: 2520:    int flag = 0;
+    #####: 2521:    int times = 0;
+    #####: 2522:    int invertible = 1;
+    #####: 2523:    InitRandom((randseed++) ^ ((unsigned int)time(NULL)));
+    #####: 2524:    identityM128(Mat);
+    #####: 2525:    identityM128(Mat_inv);
+    #####: 2526:    randM128(&tempMat);
+    #####: 2527:    copyM128(tempMat, &resultMat); 
+    #####: 2528:    for(i = 0; i < 64; i++)//diagonal = 1?
+        -: 2529:    {
+    #####: 2530:        if((tempMat.M[i][0] & idM64[i]) == idM64[i])
+        -: 2531:        {
+    #####: 2532:            for(j = i + 1; j < 128; j++)
+        -: 2533:            {
+    #####: 2534:                if((tempMat.M[j][0] & idM64[i]) == idM64[i])
+        -: 2535:                {
+    #####: 2536:                    tempMat.M[j][0] ^= tempMat.M[i][0];
+    #####: 2537:                    tempMat.M[j][1] ^= tempMat.M[i][1];
+        -: 2538:
+    #####: 2539:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 2540:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 2541:
+    #####: 2542:                    trail[times][0] = 1;
+    #####: 2543:                    trail[times][1] = j;
+    #####: 2544:                    trail[times][2] = i;
+    #####: 2545:                    times++;
+        -: 2546:                }
+        -: 2547:            }
+        -: 2548:        }
+        -: 2549:        else// swap to find 1
+        -: 2550:        {
+    #####: 2551:            flag = 1;
+    #####: 2552:            for(j = i + 1; j < 128; j++)
+        -: 2553:            {
+    #####: 2554:                if((tempMat.M[j][0] & idM64[i]) == idM64[i])
+        -: 2555:                {
+    #####: 2556:                    temp = tempMat.M[i][0];
+    #####: 2557:                    tempMat.M[i][0] = tempMat.M[j][0];
+    #####: 2558:                    tempMat.M[j][0] = temp;
+        -: 2559:
+    #####: 2560:                    temp = tempMat.M[i][1];
+    #####: 2561:                    tempMat.M[i][1] = tempMat.M[j][1];
+    #####: 2562:                    tempMat.M[j][1] = temp;
+        -: 2563:
+    #####: 2564:                    flag = 0;
+        -: 2565:
+    #####: 2566:                    temp = (*Mat_inv).M[i][0];
+    #####: 2567:                    (*Mat_inv).M[i][0] = (*Mat_inv).M[j][0];
+    #####: 2568:                    (*Mat_inv).M[j][0] = temp;
+        -: 2569:
+    #####: 2570:                    temp = (*Mat_inv).M[i][1];
+    #####: 2571:                    (*Mat_inv).M[i][1] = (*Mat_inv).M[j][1];
+    #####: 2572:                    (*Mat_inv).M[j][1] = temp;
+        -: 2573:
+    #####: 2574:                    trail[times][0] = 0;
+    #####: 2575:                    trail[times][1] = j;
+    #####: 2576:                    trail[times][2] = i;
+    #####: 2577:                    times++;
+    #####: 2578:                    break;
+        -: 2579:                }
+        -: 2580:            }
+    #####: 2581:            if(flag) //can not find 1 which means not invertible
+        -: 2582:            {
+    #####: 2583:                invertible = 0;
+    #####: 2584:                p = i + 1 + cus_random()%(127 - i);//swap
+        -: 2585:                
+    #####: 2586:                temp = tempMat.M[p][0];
+    #####: 2587:                tempMat.M[p][0] = tempMat.M[i][0];
+    #####: 2588:                tempMat.M[i][0] = temp;
+        -: 2589:
+    #####: 2590:                temp = tempMat.M[p][1];
+    #####: 2591:                tempMat.M[p][1] = tempMat.M[i][1];
+    #####: 2592:                tempMat.M[i][1] = temp;
+        -: 2593:                
+    #####: 2594:                temp = (*Mat_inv).M[p][0];
+    #####: 2595:                (*Mat_inv).M[p][0] = (*Mat_inv).M[i][0];
+    #####: 2596:                (*Mat_inv).M[i][0] = temp;
+        -: 2597:
+    #####: 2598:                temp = (*Mat_inv).M[p][1];
+    #####: 2599:                (*Mat_inv).M[p][1] = (*Mat_inv).M[i][1];
+    #####: 2600:                (*Mat_inv).M[i][1] = temp;
+        -: 2601:                
+    #####: 2602:                trail[times][0] = 0;
+    #####: 2603:                trail[times][1] = p;
+    #####: 2604:                trail[times][2] = i;
+    #####: 2605:                times++;
+        -: 2606:
+    #####: 2607:                for(t = i + 1; t < 128; t++)
+        -: 2608:                {
+    #####: 2609:                    if(cus_random()%2)
+        -: 2610:                    {
+    #####: 2611:                        tempMat.M[t][0] ^= tempMat.M[i][0];
+    #####: 2612:                        tempMat.M[t][1] ^= tempMat.M[i][1];
+        -: 2613:
+    #####: 2614:                        (*Mat_inv).M[t][0] ^= (*Mat_inv).M[i][0];
+    #####: 2615:                        (*Mat_inv).M[t][1] ^= (*Mat_inv).M[i][1];
+    #####: 2616:                        trail[times][0] = 1;
+    #####: 2617:                        trail[times][1] = t;
+    #####: 2618:                        trail[times][2] = i;
+    #####: 2619:                        times++;
+        -: 2620:                    }
+        -: 2621:                }
+        -: 2622:            }
+        -: 2623:            else //can still contiune
+        -: 2624:            {
+    #####: 2625:                for(k = i + 1; k < 128; k++)
+        -: 2626:                {
+    #####: 2627:                    if((tempMat.M[k][0] & idM64[i]) == idM64[i])
+        -: 2628:                    {
+    #####: 2629:                        tempMat.M[k][0] ^= tempMat.M[i][0];
+    #####: 2630:                        tempMat.M[k][1] ^= tempMat.M[i][1];
+        -: 2631:
+    #####: 2632:                        (*Mat_inv).M[k][0] ^= (*Mat_inv).M[i][0];
+    #####: 2633:                        (*Mat_inv).M[k][1] ^= (*Mat_inv).M[i][1];
+        -: 2634:
+    #####: 2635:                        trail[times][0] = 1;
+    #####: 2636:                        trail[times][1] = k;
+    #####: 2637:                        trail[times][2] = i;
+    #####: 2638:                        times++;
+        -: 2639:                    }
+        -: 2640:                }
+        -: 2641:            }
+        -: 2642:        }
+        -: 2643:    }
+    #####: 2644:    for(i = 64; i < 128; i++)//diagonal = 1?
+        -: 2645:    {
+    #####: 2646:        if((tempMat.M[i][1] & idM64[i - 64]) == idM64[i - 64])
+        -: 2647:        {
+    #####: 2648:            for(j = i + 1; j < 128; j++)
+        -: 2649:            {
+    #####: 2650:                if((tempMat.M[j][1] & idM64[i - 64]) == idM64[i - 64])
+        -: 2651:                {
+    #####: 2652:                    tempMat.M[j][1] ^= tempMat.M[i][1];
+        -: 2653:
+    #####: 2654:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 2655:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 2656:
+    #####: 2657:                    trail[times][0] = 1;
+    #####: 2658:                    trail[times][1] = j;
+    #####: 2659:                    trail[times][2] = i;
+    #####: 2660:                    times++;
+        -: 2661:                }
+        -: 2662:            }
+        -: 2663:        }
+        -: 2664:        else// swap to find 1
+        -: 2665:        {
+    #####: 2666:            flag = 1;
+    #####: 2667:            for(j = i + 1; j < 128; j++)
+        -: 2668:            {
+    #####: 2669:                if((tempMat.M[j][1] & idM64[i - 64]) == idM64[i - 64])
+        -: 2670:                {
+    #####: 2671:                    temp = tempMat.M[i][1];
+    #####: 2672:                    tempMat.M[i][1] = tempMat.M[j][1];
+    #####: 2673:                    tempMat.M[j][1] = temp;
+        -: 2674:
+    #####: 2675:                    flag=0;
+        -: 2676:
+    #####: 2677:                    temp = (*Mat_inv).M[i][0];
+    #####: 2678:                    (*Mat_inv).M[i][0] = (*Mat_inv).M[j][0];
+    #####: 2679:                    (*Mat_inv).M[j][0] = temp;
+        -: 2680:
+    #####: 2681:                    temp = (*Mat_inv).M[i][1];
+    #####: 2682:                    (*Mat_inv).M[i][1] = (*Mat_inv).M[j][1];
+    #####: 2683:                    (*Mat_inv).M[j][1] = temp;
+        -: 2684:
+    #####: 2685:                    trail[times][0] = 0;
+    #####: 2686:                    trail[times][1] = j;
+    #####: 2687:                    trail[times][2] = i;
+    #####: 2688:                    times++;
+    #####: 2689:                    break;
+        -: 2690:                }
+        -: 2691:            }
+    #####: 2692:            if(flag) //can not find 1 which means not invertible
+        -: 2693:            {
+    #####: 2694:                invertible = 0;
+    #####: 2695:                if(i < 127)
+        -: 2696:                {
+    #####: 2697:                    p = i + 1 + cus_random()%(127 - i);//swap
+        -: 2698:
+    #####: 2699:                    temp = tempMat.M[p][1];
+    #####: 2700:                    tempMat.M[p][1] = tempMat.M[i][1];
+    #####: 2701:                    tempMat.M[i][1] = temp;
+        -: 2702:                    
+    #####: 2703:                    temp = (*Mat_inv).M[p][0];
+    #####: 2704:                    (*Mat_inv).M[p][0] = (*Mat_inv).M[i][0];
+    #####: 2705:                    (*Mat_inv).M[i][0] = temp;
+        -: 2706:
+    #####: 2707:                    temp = (*Mat_inv).M[p][1];
+    #####: 2708:                    (*Mat_inv).M[p][1] = (*Mat_inv).M[i][1];
+    #####: 2709:                    (*Mat_inv).M[i][1] = temp;
+        -: 2710:                    
+    #####: 2711:                    trail[times][0] = 0;
+    #####: 2712:                    trail[times][1] = p;
+    #####: 2713:                    trail[times][2] = i;
+    #####: 2714:                    times++;
+        -: 2715:
+    #####: 2716:                    for(t = i + 1; t < 128; t++)
+        -: 2717:                    {
+    #####: 2718:                        if(cus_random()%2)
+        -: 2719:                        {
+    #####: 2720:                            tempMat.M[t][1] ^= tempMat.M[i][1];
+        -: 2721:
+    #####: 2722:                            (*Mat_inv).M[t][0] ^= (*Mat_inv).M[i][0];
+    #####: 2723:                            (*Mat_inv).M[t][1] ^= (*Mat_inv).M[i][1];
+    #####: 2724:                            trail[times][0] = 1;
+    #####: 2725:                            trail[times][1] = t;
+    #####: 2726:                            trail[times][2] = i;
+    #####: 2727:                            times++;
+        -: 2728:                        }
+        -: 2729:                    }
+        -: 2730:                }
+        -: 2731:            }
+        -: 2732:            else //can still contiune
+        -: 2733:            {
+    #####: 2734:                for(k = i + 1; k < 128; k++)
+        -: 2735:                {
+    #####: 2736:                    if((tempMat.M[k][1] & idM64[i - 64]) == idM64[i - 64])
+        -: 2737:                    {
+    #####: 2738:                        tempMat.M[k][1] ^= tempMat.M[i][1];
+        -: 2739:
+    #####: 2740:                        (*Mat_inv).M[k][0] ^= (*Mat_inv).M[i][0];
+    #####: 2741:                        (*Mat_inv).M[k][1] ^= (*Mat_inv).M[i][1];
+        -: 2742:
+    #####: 2743:                        trail[times][0] = 1;
+    #####: 2744:                        trail[times][1] = k;
+    #####: 2745:                        trail[times][2] = i;
+    #####: 2746:                        times++;
+        -: 2747:                    }
+        -: 2748:                }
+        -: 2749:            }
+        -: 2750:        }
+        -: 2751:    }
+    #####: 2752:    if(!invertible)//not invertible
+        -: 2753:    {
+    #####: 2754:        for(t = 127; t >= 64; t--)
+        -: 2755:        {
+    #####: 2756:            for(j = t - 1; j >= 0; j--)
+        -: 2757:            {
+    #####: 2758:                if((tempMat.M[j][1] & idM64[t - 64]) == idM64[t - 64])
+        -: 2759:                {
+    #####: 2760:                    tempMat.M[j][1] ^= tempMat.M[t][1];
+        -: 2761:
+    #####: 2762:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[t][0];
+    #####: 2763:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[t][1];
+        -: 2764:
+    #####: 2765:                    trail[times][0] = 1;
+    #####: 2766:                    trail[times][1] = j;
+    #####: 2767:                    trail[times][2] = t;
+    #####: 2768:                    times++;
+        -: 2769:                }
+        -: 2770:            }
+        -: 2771:        }
+    #####: 2772:        for(t = 63; t >= 0; t--)
+        -: 2773:        {
+    #####: 2774:            for(j = t - 1; j >= 0; j--)
+        -: 2775:            {
+    #####: 2776:                if((tempMat.M[j][0] & idM64[t]) == idM64[t])
+        -: 2777:                {
+    #####: 2778:                    tempMat.M[j][0] ^= tempMat.M[t][0];
+        -: 2779:
+    #####: 2780:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[t][0];
+    #####: 2781:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[t][1];
+        -: 2782:
+    #####: 2783:                    trail[times][0] = 1;
+    #####: 2784:                    trail[times][1] = j;
+    #####: 2785:                    trail[times][2] = t;
+    #####: 2786:                    times++;
+        -: 2787:                }
+        -: 2788:            }
+        -: 2789:        }
+        -: 2790:        
+    #####: 2791:        for(j = times - 1; j >= 0; j--)//generate inverse matrix
+        -: 2792:        {
+    #####: 2793:            if(trail[j][0])//add
+        -: 2794:            {
+    #####: 2795:                (*Mat).M[trail[j][1]][0] ^= (*Mat).M[trail[j][2]][0];
+    #####: 2796:                (*Mat).M[trail[j][1]][1] ^= (*Mat).M[trail[j][2]][1];
+        -: 2797:            }
+        -: 2798:            else//swap
+        -: 2799:            {
+    #####: 2800:                temp = (*Mat).M[trail[j][1]][0];
+    #####: 2801:                (*Mat).M[trail[j][1]][0] = (*Mat).M[trail[j][2]][0];
+    #####: 2802:                (*Mat).M[trail[j][2]][0] = temp;
+        -: 2803:
+    #####: 2804:                temp = (*Mat).M[trail[j][1]][1];
+    #####: 2805:                (*Mat).M[trail[j][1]][1] = (*Mat).M[trail[j][2]][1];
+    #####: 2806:                (*Mat).M[trail[j][2]][1] = temp;
+        -: 2807:            }   
+        -: 2808:        }
+        -: 2809:    }
+        -: 2810:    else//invertible 
+        -: 2811:    {
+    #####: 2812:        for(i = 127; i >= 64; i--)
+        -: 2813:        {
+    #####: 2814:            for(j = i - 1; j >= 0; j--)
+        -: 2815:            {
+    #####: 2816:                if((tempMat.M[j][1] & idM64[i - 64]) == idM64[i - 64])
+        -: 2817:                {
+    #####: 2818:                    tempMat.M[j][1] ^= tempMat.M[i][1];
+        -: 2819:
+    #####: 2820:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 2821:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 2822:                }
+        -: 2823:            }
+        -: 2824:        }
+    #####: 2825:        for(i = 63; i >= 0; i--)
+        -: 2826:        {
+    #####: 2827:            for(j = i - 1; j >= 0; j--)
+        -: 2828:            {
+    #####: 2829:                if((tempMat.M[j][0] & idM64[i]) == idM64[i])
+        -: 2830:                {
+    #####: 2831:                    tempMat.M[j][0] ^= tempMat.M[i][0];
+        -: 2832:
+    #####: 2833:                    (*Mat_inv).M[j][0] ^= (*Mat_inv).M[i][0];
+    #####: 2834:                    (*Mat_inv).M[j][1] ^= (*Mat_inv).M[i][1];
+        -: 2835:                }
+        -: 2836:            }
+        -: 2837:        }
+    #####: 2838:        copyM128(resultMat, Mat);
+        -: 2839:    }
+    #####: 2840:}
+    #####: 2841:void genaffinepairM4(Aff4 *aff, Aff4 *aff_inv)//generate a pair of affine
+        -: 2842:{
+    #####: 2843:    genMatpairM4(&(aff->Mat), &(aff_inv->Mat));
+    #####: 2844:    randV4(&(aff->Vec));
+    #####: 2845:    MatMulVecM4((*aff_inv).Mat, (*aff).Vec, &(aff_inv->Vec));
+    #####: 2846:}
+    #####: 2847:void genaffinepairM8(Aff8 *aff, Aff8 *aff_inv)//generate a pair of affine
+        -: 2848:{
+    #####: 2849:    genMatpairM8(&(aff->Mat), &(aff_inv->Mat));
+    #####: 2850:    randV8(&(aff->Vec));
+    #####: 2851:    MatMulVecM8((*aff_inv).Mat, (*aff).Vec, &(aff_inv->Vec));
+    #####: 2852:}
+    #####: 2853:void genaffinepairM16(Aff16 *aff, Aff16 *aff_inv)//generate a pair of affine
+        -: 2854:{
+    #####: 2855:    genMatpairM16(&(aff->Mat), &(aff_inv->Mat));
+    #####: 2856:    randV16(&(aff->Vec));
+    #####: 2857:    MatMulVecM16((*aff_inv).Mat, (*aff).Vec, &(aff_inv->Vec));
+    #####: 2858:}
+    #####: 2859:void genaffinepairM32(Aff32 *aff, Aff32 *aff_inv)//generate a pair of affine
+        -: 2860:{
+    #####: 2861:    genMatpairM32(&(aff->Mat), &(aff_inv->Mat));
+    #####: 2862:    randV32(&(aff->Vec));
+    #####: 2863:    MatMulVecM32((*aff_inv).Mat, (*aff).Vec, &(aff_inv->Vec));
+    #####: 2864:}
+    #####: 2865:void genaffinepairM64(Aff64 *aff, Aff64 *aff_inv)//generate a pair of affine
+        -: 2866:{
+    #####: 2867:    genMatpairM64(&(aff->Mat), &(aff_inv->Mat));
+    #####: 2868:    randV64(&(aff->Vec));
+    #####: 2869:    MatMulVecM64((*aff_inv).Mat, (*aff).Vec, &(aff_inv->Vec));
+    #####: 2870:}
+    #####: 2871:void genaffinepairM128(Aff128 *aff, Aff128 *aff_inv)//generate a pair of affine
+        -: 2872:{
+    #####: 2873:    genMatpairM128(&(aff->Mat), &(aff_inv->Mat));
+    #####: 2874:    randV128(&(aff->Vec));
+    #####: 2875:    MatMulVecM128((*aff_inv).Mat, (*aff).Vec, &(aff_inv->Vec));
+    #####: 2876:}
+    13728: 2877:void MatrixcomM8to32(M8 m1, M8 m2, M8 m3, M8 m4, M32 *mat)//diagonal matrix concatenation, four 8*8 -> 32*32
+        -: 2878:{
+        -: 2879:    int i;
+    13728: 2880:    int j = 0;
+        -: 2881:    uint8_t* m;
+    13728: 2882:    initM32(mat);
+   123552: 2883:    for(i = 0; i < 8; i++)
+        -: 2884:    {
+   109824: 2885:        m = (uint8_t*)&(*mat).M[j];
+   109824: 2886:        *(m+3) = m1.M[i];
+   109824: 2887:        j++;
+        -: 2888:    }
+   123552: 2889:    for(i = 0; i < 8; i++)
+        -: 2890:    {
+   109824: 2891:        m = (uint8_t*)&(*mat).M[j];
+   109824: 2892:        *(m+2) = m2.M[i];
+   109824: 2893:        j++;
+        -: 2894:    }
+   123552: 2895:    for(i = 0; i < 8; i++)
+        -: 2896:    {
+   109824: 2897:        m = (uint8_t*)&(*mat).M[j];
+   109824: 2898:        *(m+1) = m3.M[i];
+   109824: 2899:        j++;
+        -: 2900:    }
+   123552: 2901:    for(i = 0; i < 8; i++)
+        -: 2902:    {
+   109824: 2903:        m = (uint8_t*)&(*mat).M[j];
+   109824: 2904:        *m = m4.M[i];
+   109824: 2905:        j++;
+        -: 2906:    }
+    13728: 2907:}
+    #####: 2908:void VectorcomV8to32(V8 v1, V8 v2, V8 v3, V8 v4, V32 *vec)//4 vectors concatenation
+        -: 2909:{
+        -: 2910:    uint8_t* v;
+    #####: 2911:    v = (uint8_t*)&(*vec).V;
+    #####: 2912:    *(v+3) = v1.V;
+    #####: 2913:    *(v+2) = v2.V;
+    #####: 2914:    *(v+1) = v3.V;
+    #####: 2915:    *v = v4.V;
+    #####: 2916:}
+    #####: 2917:void affinecomM8to32(Aff8 aff1, Aff8 aff2, Aff8 aff3, Aff8 aff4, Aff32 *aff)//diagonal affine concatenation, four 8*8 -> 32*32
+        -: 2918:{
+    #####: 2919:    MatrixcomM8to32(aff1.Mat, aff2.Mat, aff3.Mat, aff4.Mat, &(aff->Mat));
+    #####: 2920:    VectorcomV8to32(aff1.Vec, aff2.Vec, aff3.Vec, aff4.Vec, &(aff->Vec));
+    #####: 2921:}
+    #####: 2922:void MatrixcomM16to64(M16 m1, M16 m2, M16 m3, M16 m4, M64 *mat)//diagonal matrix concatenation, four 16*16 -> 64*64
+        -: 2923:{
+        -: 2924:    int i;
+    #####: 2925:    int j = 0;
+        -: 2926:    uint16_t* m;
+    #####: 2927:    initM64(mat);
+    #####: 2928:    for(i = 0; i < 16; i++)
+        -: 2929:    {
+    #####: 2930:        m = (uint16_t*)&(*mat).M[j];
+    #####: 2931:        *(m+3) = m1.M[i];
+    #####: 2932:        j++;
+        -: 2933:    }
+    #####: 2934:    for(i = 0; i < 16; i++)
+        -: 2935:    {
+    #####: 2936:        m = (uint16_t*)&(*mat).M[j];
+    #####: 2937:        *(m+2) = m2.M[i];
+    #####: 2938:        j++;
+        -: 2939:    }
+    #####: 2940:    for(i = 0; i < 16; i++)
+        -: 2941:    {
+    #####: 2942:        m = (uint16_t*)&(*mat).M[j];
+    #####: 2943:        *(m+1) = m3.M[i];
+    #####: 2944:        j++;
+        -: 2945:    }
+    #####: 2946:    for(i = 0; i < 16; i++)
+        -: 2947:    {
+    #####: 2948:        m = (uint16_t*)&(*mat).M[j];
+    #####: 2949:        *m = m4.M[i];
+    #####: 2950:        j++;
+        -: 2951:    }
+    #####: 2952:}
+    #####: 2953:void VectorcomV16to64(V16 v1, V16 v2, V16 v3, V16 v4, V64 *vec)//4 vectors concatenation
+        -: 2954:{
+        -: 2955:    uint16_t* v;
+    #####: 2956:    v = (uint16_t*)&(*vec).V;
+    #####: 2957:    *(v+3) = v1.V;
+    #####: 2958:    *(v+2) = v2.V;
+    #####: 2959:    *(v+1) = v3.V;
+    #####: 2960:    *v = v4.V;
+    #####: 2961:}
+    #####: 2962:void affinecomM16to64(Aff16 aff1, Aff16 aff2, Aff16 aff3, Aff16 aff4, Aff64 *aff)//diagonal affine concatenation,four 16*16 -> 64*64
+        -: 2963:{
+    #####: 2964:    MatrixcomM16to64(aff1.Mat, aff2.Mat, aff3.Mat, aff4.Mat, &(aff->Mat));
+    #####: 2965:    VectorcomV16to64(aff1.Vec, aff2.Vec, aff3.Vec, aff4.Vec, &(aff->Vec));
+    #####: 2966:}
+    #####: 2967:void MatrixcomM8to64(M8 m1, M8 m2, M8 m3, M8 m4, M8 m5, M8 m6, M8 m7, M8 m8, M64 *mat)//diagonal matrix concatenation,four 8*8 -> 64*64
+        -: 2968:{
+        -: 2969:    int i;
+    #####: 2970:    int j = 0;
+        -: 2971:    uint8_t* m;
+    #####: 2972:    initM64(mat);
+    #####: 2973:    for(i = 0; i < 8; i++)
+        -: 2974:    {
+    #####: 2975:        m = (uint8_t*)&(*mat).M[j];
+    #####: 2976:        *(m+7) = m1.M[i];
+    #####: 2977:        j++;
+        -: 2978:    }
+    #####: 2979:    for(i = 0; i < 8; i++)
+        -: 2980:    {
+    #####: 2981:        m = (uint8_t*)&(*mat).M[j];
+    #####: 2982:        *(m+6) = m2.M[i];
+    #####: 2983:        j++;
+        -: 2984:    }
+    #####: 2985:    for(i = 0; i < 8; i++)
+        -: 2986:    {
+    #####: 2987:        m = (uint8_t*)&(*mat).M[j];
+    #####: 2988:        *(m+5) = m3.M[i];
+    #####: 2989:        j++;
+        -: 2990:    }
+    #####: 2991:    for(i = 0; i < 8; i++)
+        -: 2992:    {
+    #####: 2993:        m = (uint8_t*)&(*mat).M[j];
+    #####: 2994:        *(m+4) = m4.M[i];
+    #####: 2995:        j++;
+        -: 2996:    }
+    #####: 2997:    for(i=0;i<8;i++)
+        -: 2998:    {
+    #####: 2999:        m = (uint8_t*)&(*mat).M[j];
+    #####: 3000:        *(m+3) = m5.M[i];
+    #####: 3001:        j++;
+        -: 3002:    }
+    #####: 3003:    for(i = 0; i < 8; i++)
+        -: 3004:    {
+    #####: 3005:        m = (uint8_t*)&(*mat).M[j];
+    #####: 3006:        *(m+2) = m6.M[i];
+    #####: 3007:        j++;
+        -: 3008:    }
+    #####: 3009:    for(i = 0; i < 8; i++)
+        -: 3010:    {
+    #####: 3011:        m = (uint8_t*)&(*mat).M[j];
+    #####: 3012:        *(m+1) = m7.M[i];
+    #####: 3013:        j++;
+        -: 3014:    }
+    #####: 3015:    for(i = 0; i < 8; i++)
+        -: 3016:    {
+    #####: 3017:        m = (uint8_t*)&(*mat).M[j];
+    #####: 3018:        *m = m8.M[i];
+    #####: 3019:        j++;
+        -: 3020:    }
+    #####: 3021:}
+    #####: 3022:void VectorcomV8to64(V8 v1, V8 v2, V8 v3, V8 v4, V8 v5, V8 v6, V8 v7, V8 v8, V64 *vec)//8 vectors concatenation
+        -: 3023:{
+        -: 3024:    uint8_t* v;
+    #####: 3025:    v = (uint8_t*)&(*vec).V;
+    #####: 3026:    *(v+7) = v1.V;
+    #####: 3027:    *(v+6) = v2.V;
+    #####: 3028:    *(v+5) = v3.V;
+    #####: 3029:    *(v+4) = v4.V;
+    #####: 3030:    *(v+3) = v5.V;
+    #####: 3031:    *(v+2) = v6.V;
+    #####: 3032:    *(v+1) = v7.V;
+    #####: 3033:    *v = v8.V;
+    #####: 3034:}
+    #####: 3035:void affinecomM8to64(Aff8 aff1, Aff8 aff2, Aff8 aff3, Aff8 aff4, Aff8 aff5, Aff8 aff6, Aff8 aff7, Aff8 aff8, Aff64 *aff)//diagonal affine concatenation, four 8*8 -> 64*64
+        -: 3036:{
+    #####: 3037:    MatrixcomM8to64(aff1.Mat, aff2.Mat, aff3.Mat, aff4.Mat, aff5.Mat, aff6.Mat, aff7.Mat, aff8.Mat, &(aff->Mat));
+    #####: 3038:    VectorcomV8to64(aff1.Vec, aff2.Vec, aff3.Vec, aff4.Vec, aff5.Vec, aff6.Vec, aff7.Vec, aff8.Vec, &(aff->Vec));
+    #####: 3039:}
+    #####: 3040:void MatrixcomM32to128(M32 m1, M32 m2, M32 m3, M32 m4, M128 *mat)//diagonal matrix concatenation, four 32*32 -> 128*128
+        -: 3041:{
+        -: 3042:    int i;
+    #####: 3043:    int j = 0;
+        -: 3044:    uint32_t* m;
+    #####: 3045:    initM128(mat);
+    #####: 3046:    for(i = 0; i < 32; i++)
+        -: 3047:    {
+    #####: 3048:        m = (uint32_t*)&(*mat).M[j][0];
+    #####: 3049:        *(m+1) = m1.M[i];
+    #####: 3050:        j++;
+        -: 3051:    }
+    #####: 3052:    for(i = 0; i < 32; i++)
+        -: 3053:    {
+    #####: 3054:        m = (uint32_t*)&(*mat).M[j][0];
+    #####: 3055:        *m = m2.M[i];
+    #####: 3056:        j++;
+        -: 3057:    }
+    #####: 3058:    for(i = 0; i < 32; i++)
+        -: 3059:    {
+    #####: 3060:        m = (uint32_t*)&(*mat).M[j][1];
+    #####: 3061:        *(m+1) = m3.M[i];
+    #####: 3062:        j++;
+        -: 3063:    }
+    #####: 3064:    for(i = 0; i < 32; i++)
+        -: 3065:    {
+    #####: 3066:        m = (uint32_t*)&(*mat).M[j][1];
+    #####: 3067:        *m = m4.M[i];
+    #####: 3068:        j++;
+        -: 3069:    }
+    #####: 3070:}
+    #####: 3071:void VectorcomV32to128(V32 v1, V32 v2, V32 v3, V32 v4, V128 *vec)//4 vectors concatenation
+        -: 3072:{
+        -: 3073:    uint32_t* v;
+    #####: 3074:    v = (uint32_t*)&(*vec).V[0];
+    #####: 3075:    *(v+1) = v1.V;
+    #####: 3076:    *v = v2.V;
+    #####: 3077:    v = (uint32_t*)&(*vec).V[1];
+    #####: 3078:    *(v+1) = v3.V;
+    #####: 3079:    *v = v4.V;
+    #####: 3080:}
+    #####: 3081:void affinecomM32to128(Aff32 aff1, Aff32 aff2, Aff32 aff3, Aff32 aff4, Aff128 *aff)//diagonal affine concatenation, four 32*32 -> 128*128
+        -: 3082:{
+    #####: 3083:    MatrixcomM32to128(aff1.Mat, aff2.Mat, aff3.Mat, aff4.Mat, &(aff->Mat));
+    #####: 3084:    VectorcomV32to128(aff1.Vec, aff2.Vec, aff3.Vec, aff4.Vec, &(aff->Vec));
+    #####: 3085:}
+    #####: 3086:void MatrixcomM8to128(M8 m1, M8 m2, M8 m3, M8 m4, M8 m5, M8 m6, M8 m7, M8 m8, M8 m9, M8 m10, M8 m11, M8 m12, M8 m13, M8 m14, M8 m15, M8 m16, M128 *mat)//diagonal matrix concatenation, 16 8*8 -> 128*128
+        -: 3087:{
+        -: 3088:    int i;
+    #####: 3089:    int j = 0;
+        -: 3090:    uint8_t* m;
+    #####: 3091:    initM128(mat);
+    #####: 3092:    for(i = 0; i < 8; i++)
+        -: 3093:    {
+    #####: 3094:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3095:        *(m+7) = m1.M[i];
+    #####: 3096:        j++;
+        -: 3097:    }
+    #####: 3098:    for(i = 0; i < 8; i++)
+        -: 3099:    {
+    #####: 3100:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3101:        *(m+6) = m2.M[i];
+    #####: 3102:        j++;
+        -: 3103:    }
+    #####: 3104:    for(i = 0; i < 8; i++)
+        -: 3105:    {
+    #####: 3106:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3107:        *(m+5) = m3.M[i];
+    #####: 3108:        j++;
+        -: 3109:    }
+    #####: 3110:    for(i = 0; i < 8; i++)
+        -: 3111:    {
+    #####: 3112:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3113:        *(m+4) = m4.M[i];
+    #####: 3114:        j++;
+        -: 3115:    }
+    #####: 3116:    for(i = 0; i < 8; i++)
+        -: 3117:    {
+    #####: 3118:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3119:        *(m+3) = m5.M[i];
+    #####: 3120:        j++;
+        -: 3121:    }
+    #####: 3122:    for(i = 0; i < 8; i++)
+        -: 3123:    {
+    #####: 3124:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3125:        *(m+2) = m6.M[i];
+    #####: 3126:        j++;
+        -: 3127:    }
+    #####: 3128:    for(i = 0; i < 8; i++)
+        -: 3129:    {
+    #####: 3130:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3131:        *(m+1) = m7.M[i];
+    #####: 3132:        j++;
+        -: 3133:    }
+    #####: 3134:    for(i = 0; i < 8; i++)
+        -: 3135:    {
+    #####: 3136:        m = (uint8_t*)&(*mat).M[j][0];
+    #####: 3137:        *m = m8.M[i];
+    #####: 3138:        j++;
+        -: 3139:    }
+    #####: 3140:    for(i = 0; i < 8; i++)
+        -: 3141:    {
+    #####: 3142:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3143:        *(m+7) = m9.M[i];
+    #####: 3144:        j++;
+        -: 3145:    }
+    #####: 3146:    for(i = 0; i < 8; i++)
+        -: 3147:    {
+    #####: 3148:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3149:        *(m+6) = m10.M[i];
+    #####: 3150:        j++;
+        -: 3151:    }
+    #####: 3152:    for(i = 0; i < 8; i++)
+        -: 3153:    {
+    #####: 3154:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3155:        *(m+5) = m11.M[i];
+    #####: 3156:        j++;
+        -: 3157:    }
+    #####: 3158:    for(i = 0; i < 8; i++)
+        -: 3159:    {
+    #####: 3160:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3161:        *(m+4) = m12.M[i];
+    #####: 3162:        j++;
+        -: 3163:    }
+    #####: 3164:    for(i = 0; i < 8; i++)
+        -: 3165:    {
+    #####: 3166:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3167:        *(m+3) = m13.M[i];
+    #####: 3168:        j++;
+        -: 3169:    }
+    #####: 3170:    for(i = 0; i < 8; i++)
+        -: 3171:    {
+    #####: 3172:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3173:        *(m+2) = m14.M[i];
+    #####: 3174:        j++;
+        -: 3175:    }
+    #####: 3176:    for(i = 0; i < 8; i++)
+        -: 3177:    {
+    #####: 3178:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3179:        *(m+1) = m15.M[i];
+    #####: 3180:        j++;
+        -: 3181:    }
+    #####: 3182:    for(i = 0; i < 8; i++)
+        -: 3183:    {
+    #####: 3184:        m = (uint8_t*)&(*mat).M[j][1];
+    #####: 3185:        *m = m16.M[i];
+    #####: 3186:        j++;
+        -: 3187:    }
+    #####: 3188:}
+    #####: 3189:void VectorcomV8to128(V8 v1, V8 v2, V8 v3, V8 v4, V8 v5, V8 v6, V8 v7, V8 v8, V8 v9, V8 v10, V8 v11, V8 v12, V8 v13, V8 v14, V8 v15, V8 v16, V128 *vec)//16 vectors concatenation
+        -: 3190:{
+        -: 3191:    uint8_t* v;
+    #####: 3192:    v = (uint8_t*)&(*vec).V[0];
+    #####: 3193:    *(v+7) = v1.V;
+    #####: 3194:    *(v+6) = v2.V;
+    #####: 3195:    *(v+5) = v3.V;
+    #####: 3196:    *(v+4) = v4.V;
+    #####: 3197:    *(v+3) = v5.V;
+    #####: 3198:    *(v+2) = v6.V;
+    #####: 3199:    *(v+1) = v7.V;
+    #####: 3200:    *v = v8.V;
+    #####: 3201:    v = (uint8_t*)&(*vec).V[1];
+    #####: 3202:    *(v+7) = v9.V;
+    #####: 3203:    *(v+6) = v10.V;
+    #####: 3204:    *(v+5) = v11.V;
+    #####: 3205:    *(v+4) = v12.V;
+    #####: 3206:    *(v+3) = v13.V;
+    #####: 3207:    *(v+2) = v14.V;
+    #####: 3208:    *(v+1) = v15.V;
+    #####: 3209:    *v = v16.V;
+    #####: 3210:}
+    #####: 3211:void affinecomM8to128(Aff8 aff1, Aff8 aff2, Aff8 aff3, Aff8 aff4, Aff8 aff5, Aff8 aff6, Aff8 aff7, Aff8 aff8, Aff8 aff9, Aff8 aff10, Aff8 aff11, Aff8 aff12, Aff8 aff13, Aff8 aff14, Aff8 aff15, Aff8 aff16, Aff128 *aff)//diagonal affine concatenation, 16 8*8 -> 128*128
+        -: 3212:{
+    #####: 3213:    MatrixcomM8to128(aff1.Mat, aff2.Mat, aff3.Mat, aff4.Mat, aff5.Mat, aff6.Mat, aff7.Mat, aff8.Mat, aff9.Mat, aff10.Mat, aff11.Mat, aff12.Mat, aff13.Mat, aff14.Mat, aff15.Mat, aff16.Mat, &(aff->Mat));
+    #####: 3214:    VectorcomV8to128(aff1.Vec, aff2.Vec, aff3.Vec, aff4.Vec, aff5.Vec, aff6.Vec, aff7.Vec, aff8.Vec, aff9.Vec, aff10.Vec, aff11.Vec, aff12.Vec, aff13.Vec, aff14.Vec, aff15.Vec, aff16.Vec, &(aff->Vec));
+    #####: 3215:}
+    #####: 3216:void MatrixcomM16to128(M16 m1, M16 m2, M16 m3, M16 m4, M16 m5, M16 m6, M16 m7, M16 m8, M128 *mat)//diagonal matrix concatenation, 8 16*16 -> 128*128
+        -: 3217:{
+        -: 3218:    int i;
+    #####: 3219:    int j = 0;
+        -: 3220:    uint16_t* m;
+    #####: 3221:    initM128(mat);
+    #####: 3222:    for(i = 0; i < 16; i++)
+        -: 3223:    {
+    #####: 3224:        m = (uint16_t*)&(*mat).M[j][0];
+    #####: 3225:        *(m+3) = m1.M[i];
+    #####: 3226:        j++;
+        -: 3227:    }
+    #####: 3228:    for(i = 0; i < 16; i++)
+        -: 3229:    {
+    #####: 3230:        m = (uint16_t*)&(*mat).M[j][0];
+    #####: 3231:        *(m+2) = m2.M[i];
+    #####: 3232:        j++;
+        -: 3233:    }
+    #####: 3234:    for(i = 0; i < 16; i++)
+        -: 3235:    {
+    #####: 3236:        m = (uint16_t*)&(*mat).M[j][0];
+    #####: 3237:        *(m+1) = m3.M[i];
+    #####: 3238:        j++;
+        -: 3239:    }
+    #####: 3240:    for(i = 0; i < 16; i++)
+        -: 3241:    {
+    #####: 3242:        m = (uint16_t*)&(*mat).M[j][0];
+    #####: 3243:        *m = m4.M[i];
+    #####: 3244:        j++;
+        -: 3245:    }
+    #####: 3246:    for(i = 0; i < 16; i++)
+        -: 3247:    {
+    #####: 3248:        m = (uint16_t*)&(*mat).M[j][1];
+    #####: 3249:        *(m+3) = m5.M[i];
+    #####: 3250:        j++;
+        -: 3251:    }
+    #####: 3252:    for(i = 0; i < 16; i++)
+        -: 3253:    {
+    #####: 3254:        m = (uint16_t*)&(*mat).M[j][1];
+    #####: 3255:        *(m+2) = m6.M[i];
+    #####: 3256:        j++;
+        -: 3257:    }
+    #####: 3258:    for(i = 0; i < 16; i++)
+        -: 3259:    {
+    #####: 3260:        m = (uint16_t*)&(*mat).M[j][1];
+    #####: 3261:        *(m+1) = m7.M[i];
+    #####: 3262:        j++;
+        -: 3263:    }
+    #####: 3264:    for(i = 0; i < 16; i++)
+        -: 3265:    {
+    #####: 3266:        m = (uint16_t*)&(*mat).M[j][1];
+    #####: 3267:        *m = m8.M[i];
+    #####: 3268:        j++;
+        -: 3269:    }
+    #####: 3270:}
+    #####: 3271:void VectorcomV16to128(V16 v1, V16 v2, V16 v3, V16 v4, V16 v5, V16 v6, V16 v7, V16 v8, V128 *vec)//8 vectors concatenation
+        -: 3272:{
+        -: 3273:    uint16_t* v;
+    #####: 3274:    v = (uint16_t*)&(*vec).V[0];
+    #####: 3275:    *(v+3) = v1.V;
+    #####: 3276:    *(v+2) = v2.V;
+    #####: 3277:    *(v+1) = v3.V;
+    #####: 3278:    *v = v4.V;
+    #####: 3279:    v = (uint16_t*)&(*vec).V[1];
+    #####: 3280:    *(v+3) = v5.V;
+    #####: 3281:    *(v+2) = v6.V;
+    #####: 3282:    *(v+1) = v7.V;
+    #####: 3283:    *v = v8.V;
+    #####: 3284:}
+    #####: 3285:void affinecomM16to128(Aff16 aff1, Aff16 aff2, Aff16 aff3, Aff16 aff4, Aff16 aff5, Aff16 aff6, Aff16 aff7, Aff16 aff8, Aff128 *aff)//diagonal affine concatenation, 8 16*16 -> 128*128
+        -: 3286:{
+    #####: 3287:    MatrixcomM16to128(aff1.Mat, aff2.Mat, aff3.Mat, aff4.Mat, aff5.Mat, aff6.Mat, aff7.Mat, aff8.Mat, &(aff->Mat));
+    #####: 3288:    VectorcomV16to128(aff1.Vec, aff2.Vec, aff3.Vec, aff4.Vec, aff5.Vec, aff6.Vec, aff7.Vec, aff8.Vec, &(aff->Vec));
+    #####: 3289:}
+    #####: 3290:void MattransM4(M4 Mat, M4 *Mat_trans)//matrix tansposition M4
+        -: 3291:{
+        -: 3292:    int i, j;
+        -: 3293:    uint8_t mask[2], k, k2, l, temp;
+    #####: 3294:    mask[0] = 0x5;
+    #####: 3295:    mask[1] = 0x3;
+    #####: 3296:    for(j = 0; j < 2; j++)
+        -: 3297:    {
+    #####: 3298:        k = 1 << j;
+    #####: 3299:        k2 = k * 2;
+    #####: 3300:        for(i = 0; i < 2; i++)
+        -: 3301:        {
+    #####: 3302:            l = (k2 * i) % 3;
+    #####: 3303:            temp = ((Mat.M[l] & ~mask[j]) ^ ((Mat.M[l + k] & ~mask[j]) >> k)) & 0x0f;
+    #####: 3304:            Mat.M[l + k] = ((Mat.M[l + k] & mask[j]) ^ ((Mat.M[l] & mask[j]) << k)) & 0x0f;
+    #####: 3305:            Mat.M[l] = temp;
+        -: 3306:        }
+        -: 3307:    }
+    #####: 3308:    copyM4(Mat, Mat_trans);
+    #####: 3309:}
+    #####: 3310:void MattransM8(M8 Mat, M8 *Mat_trans)//matrix tansposition M8
+        -: 3311:{
+        -: 3312:    int i, j;
+        -: 3313:    uint8_t mask[3], k, k2, l, temp;
+    #####: 3314:    mask[0] = 0x55;
+    #####: 3315:    mask[1] = 0x33;
+    #####: 3316:    mask[2] = 0x0f;
+    #####: 3317:    for(j = 0; j < 3; j++)
+        -: 3318:    {
+    #####: 3319:        k = 1 << j;
+    #####: 3320:        k2 = k * 2;
+    #####: 3321:        for(i = 0; i < 4; i++)
+        -: 3322:        {
+    #####: 3323:            l = (k2 * i) % 7;
+    #####: 3324:            temp = (Mat.M[l] & ~mask[j]) ^ ((Mat.M[l + k] & ~mask[j]) >> k);
+    #####: 3325:            Mat.M[l + k] = (Mat.M[l + k] & mask[j]) ^ ((Mat.M[l] & mask[j]) << k);
+    #####: 3326:            Mat.M[l] = temp;
+        -: 3327:        }
+        -: 3328:    }
+    #####: 3329:    copyM8(Mat, Mat_trans);
+    #####: 3330:}
+    #####: 3331:void MattransM16(M16 Mat, M16 *Mat_trans)//matrix tansposition M16
+        -: 3332:{
+        -: 3333:    int i, j;
+        -: 3334:    uint16_t mask[4], k, k2, l, temp;
+    #####: 3335:    mask[0] = 0x5555;
+    #####: 3336:    mask[1] = 0x3333;
+    #####: 3337:    mask[2] = 0x0f0f;
+    #####: 3338:    mask[3] = 0x00ff;
+    #####: 3339:    for(j = 0; j < 4; j++)
+        -: 3340:    {
+    #####: 3341:        k = 1 << j;
+    #####: 3342:        k2 = k * 2;
+    #####: 3343:        for(i = 0; i < 8; i++)
+        -: 3344:        {
+    #####: 3345:            l = (k2 * i) % 15;
+    #####: 3346:            temp = (Mat.M[l] & ~mask[j]) ^ ((Mat.M[l + k] & ~mask[j]) >> k);
+    #####: 3347:            Mat.M[l + k] = (Mat.M[l + k] & mask[j]) ^ ((Mat.M[l] & mask[j]) << k);
+    #####: 3348:            Mat.M[l] = temp;
+        -: 3349:        }
+        -: 3350:    }
+    #####: 3351:    copyM16(Mat, Mat_trans);
+    #####: 3352:}
+    #####: 3353:void MattransM32(M32 Mat, M32 *Mat_trans)//matrix tansposition M32
+        -: 3354:{
+        -: 3355:    int i, j;
+        -: 3356:    uint32_t mask[5], k, k2, l, temp;
+    #####: 3357:    mask[0] = 0x55555555;
+    #####: 3358:    mask[1] = 0x33333333;
+    #####: 3359:    mask[2] = 0x0f0f0f0f;
+    #####: 3360:    mask[3] = 0x00ff00ff;
+    #####: 3361:    mask[4] = 0x0000ffff;
+    #####: 3362:    for(j = 0; j < 5; j++)
+        -: 3363:    {
+    #####: 3364:        k = 1 << j;
+    #####: 3365:        k2 = k * 2;
+    #####: 3366:        for(i = 0; i < 16; i++)
+        -: 3367:        {
+    #####: 3368:            l = (k2 * i) % 31;
+    #####: 3369:            temp = (Mat.M[l] & ~mask[j]) ^ ((Mat.M[l + k] & ~mask[j]) >> k);
+    #####: 3370:            Mat.M[l + k] = (Mat.M[l + k] & mask[j]) ^ ((Mat.M[l] & mask[j]) << k);
+    #####: 3371:            Mat.M[l] = temp;
+        -: 3372:        }
+        -: 3373:    }
+    #####: 3374:    copyM32(Mat, Mat_trans);
+    #####: 3375:}
+    #####: 3376:void MattransM64(M64 Mat, M64 *Mat_trans)//matrix tansposition M64
+        -: 3377:{
+        -: 3378:    int i, j;
+        -: 3379:    uint64_t mask[6], k, k2, l, temp;
+    #####: 3380:    mask[0] = 0x5555555555555555;
+    #####: 3381:    mask[1] = 0x3333333333333333;
+    #####: 3382:    mask[2] = 0x0f0f0f0f0f0f0f0f;
+    #####: 3383:    mask[3] = 0x00ff00ff00ff00ff;
+    #####: 3384:    mask[4] = 0x0000ffff0000ffff;
+    #####: 3385:    mask[5] = 0x00000000ffffffff;
+    #####: 3386:    for(j = 0; j < 6; j++)
+        -: 3387:    {
+    #####: 3388:        k = 1 << j;
+    #####: 3389:        k2 = k * 2;
+    #####: 3390:        for(i = 0; i < 32; i++)
+        -: 3391:        {
+    #####: 3392:            l = (k2 * i) % 63;
+    #####: 3393:            temp = (Mat.M[l] & ~mask[j]) ^ ((Mat.M[l + k] & ~mask[j]) >> k);
+    #####: 3394:            Mat.M[l + k] = (Mat.M[l + k] & mask[j]) ^ ((Mat.M[l] & mask[j]) << k);
+    #####: 3395:            Mat.M[l] = temp;
+        -: 3396:        }
+        -: 3397:    }
+    #####: 3398:    copyM64(Mat, Mat_trans);
+    #####: 3399:}
+    #####: 3400:void MattransM128(M128 Mat, M128 *Mat_trans)//matrix tansposition M128
+        -: 3401:{
+        -: 3402:    int i, j;
+        -: 3403:    uint64_t mask[6], k, k2, l, temp;
+    #####: 3404:    mask[0] = 0x5555555555555555;
+    #####: 3405:    mask[1] = 0x3333333333333333;
+    #####: 3406:    mask[2] = 0x0f0f0f0f0f0f0f0f;
+    #####: 3407:    mask[3] = 0x00ff00ff00ff00ff;
+    #####: 3408:    mask[4] = 0x0000ffff0000ffff;
+    #####: 3409:    mask[5] = 0x00000000ffffffff;
+    #####: 3410:    for(j = 0; j < 6; j++)
+        -: 3411:    {
+    #####: 3412:        k = 1 << j;
+    #####: 3413:        k2 = k * 2;
+    #####: 3414:        for(i = 0; i < 64; i++)
+        -: 3415:        {
+    #####: 3416:            l = (k2 * i) % 127;
+    #####: 3417:            temp = (Mat.M[l][0] & ~mask[j]) ^ ((Mat.M[l + k][0] & ~mask[j]) >> k);
+    #####: 3418:            Mat.M[l + k][0] = (Mat.M[l + k][0] & mask[j]) ^ ((Mat.M[l][0] & mask[j]) << k);
+    #####: 3419:            Mat.M[l][0] = temp;
+        -: 3420:
+    #####: 3421:            temp = (Mat.M[l][1] & ~mask[j]) ^ ((Mat.M[l + k][1] & ~mask[j]) >> k);
+    #####: 3422:            Mat.M[l + k][1] = (Mat.M[l + k][1] & mask[j]) ^ ((Mat.M[l][1] & mask[j]) << k);
+    #####: 3423:            Mat.M[l][1] = temp;
+        -: 3424:        }
+        -: 3425:    }
+    #####: 3426:    for(i = 0; i < 64; i++)
+        -: 3427:    {
+    #####: 3428:        temp = Mat.M[i + 64][0];
+    #####: 3429:        Mat.M[i + 64][0] = Mat.M[i][1]; 
+    #####: 3430:        Mat.M[i][1] = temp;
+        -: 3431:    }
+    #####: 3432:    copyM128(Mat, Mat_trans);
+    #####: 3433:}
+    #####: 3434:void MatAddMatM4(M4 Mat1, M4 Mat2, M4 *Mat)
+        -: 3435:{
+        -: 3436:    int i;
+    #####: 3437:    for(i = 0; i < 4; i++)
+        -: 3438:    {
+    #####: 3439:        (*Mat).M[i] = Mat1.M[i] ^ Mat2.M[i];
+        -: 3440:    }
+    #####: 3441:}
+    #####: 3442:void MatAddMatM8(M8 Mat1, M8 Mat2, M8 *Mat)
+        -: 3443:{
+        -: 3444:    int i;
+    #####: 3445:    for(i = 0; i < 8; i++)
+        -: 3446:    {
+    #####: 3447:        (*Mat).M[i] = Mat1.M[i] ^ Mat2.M[i];
+        -: 3448:    }
+    #####: 3449:}
+    #####: 3450:void MatAddMatM16(M16 Mat1, M16 Mat2, M16 *Mat)
+        -: 3451:{
+        -: 3452:    int i;
+    #####: 3453:    for(i = 0; i < 16; i++)
+        -: 3454:    {
+    #####: 3455:        (*Mat).M[i] = Mat1.M[i] ^ Mat2.M[i];
+        -: 3456:    }
+    #####: 3457:}
+    #####: 3458:void MatAddMatM32(M32 Mat1, M32 Mat2, M32 *Mat)
+        -: 3459:{
+        -: 3460:    int i;
+    #####: 3461:    for(i = 0; i < 32; i++)
+        -: 3462:    {
+    #####: 3463:        (*Mat).M[i] = Mat1.M[i] ^ Mat2.M[i];
+        -: 3464:    }
+    #####: 3465:}
+    #####: 3466:void MatAddMatM64(M64 Mat1, M64 Mat2, M64 *Mat)
+        -: 3467:{
+        -: 3468:    int i;
+    #####: 3469:    for(i = 0; i < 64; i++)
+        -: 3470:    {
+    #####: 3471:        (*Mat).M[i] = Mat1.M[i] ^ Mat2.M[i];
+        -: 3472:    }
+    #####: 3473:}
+    #####: 3474:void MatAddMatM128(M128 Mat1, M128 Mat2, M128 *Mat)
+        -: 3475:{
+        -: 3476:    int i;
+    #####: 3477:    for(i = 0; i < 128; i++)
+        -: 3478:    {
+    #####: 3479:        (*Mat).M[i][0] = Mat1.M[i][0] ^ Mat2.M[i][0];
+    #####: 3480:        (*Mat).M[i][1] = Mat1.M[i][1] ^ Mat2.M[i][1];
+        -: 3481:    }
+    #####: 3482:}
+    #####: 3483:void MatMulMatM4(M4 Mat1, M4 Mat2, M4 *Mat)//matrix multiplication 4*4 mul 4*4 -> 4*4
+        -: 3484:{
+        -: 3485:    int i, j;
+        -: 3486:    M4 Mat2_trans;
+    #####: 3487:    initM4(Mat);
+    #####: 3488:    MattransM4(Mat2, &Mat2_trans);
+    #####: 3489:    for(i = 0; i < 4; i++)
+        -: 3490:    {
+    #####: 3491:        for(j = 0; j < 4; j++)
+        -: 3492:        {
+    #####: 3493:            if(xorU4(Mat1.M[i] & Mat2_trans.M[j] & 0x0f)) (*Mat).M[i] ^= idM4[j];
+        -: 3494:        }       
+        -: 3495:    }
+    #####: 3496:}
+    #####: 3497:void MatMulMatM8(M8 Mat1, M8 Mat2, M8 *Mat)//matrix multiplication 8*8 mul 8*8 -> 8*8
+        -: 3498:{
+        -: 3499:    int i, j;
+        -: 3500:    M8 Mat2_trans;
+    #####: 3501:    initM8(Mat);
+    #####: 3502:    MattransM8(Mat2, &Mat2_trans);
+    #####: 3503:    for(i = 0; i < 8; i++)
+        -: 3504:    {
+    #####: 3505:        for(j = 0; j < 8; j++)
+        -: 3506:        {
+    #####: 3507:            if(xorU8(Mat1.M[i] & Mat2_trans.M[j])) (*Mat).M[i] ^= idM8[j];
+        -: 3508:        }       
+        -: 3509:    }
+    #####: 3510:}
+    #####: 3511:void MatMulMatM16(M16 Mat1, M16 Mat2, M16 *Mat)//matrix multiplication 16*16 mul 16*16 -> 16*16
+        -: 3512:{
+        -: 3513:    int i, j;
+        -: 3514:    M16 Mat2_trans;
+    #####: 3515:    initM16(Mat);
+    #####: 3516:    MattransM16(Mat2, &Mat2_trans);
+    #####: 3517:    for(i = 0; i < 16; i++)
+        -: 3518:    {
+    #####: 3519:        for(j = 0; j < 16; j++)
+        -: 3520:        {
+    #####: 3521:            if(xorU16(Mat1.M[i] & Mat2_trans.M[j])) (*Mat).M[i] ^= idM16[j];
+        -: 3522:        }       
+        -: 3523:    }
+    #####: 3524:}
+    #####: 3525:void MatMulMatM32(M32 Mat1, M32 Mat2, M32 *Mat)//matrix multiplication 32*32 mul 32*32 -> 32*32
+        -: 3526:{
+        -: 3527:    int i, j;
+        -: 3528:    M32 Mat2_trans;
+    #####: 3529:    initM32(Mat);
+    #####: 3530:    MattransM32(Mat2, &Mat2_trans);
+    #####: 3531:    for(i = 0; i < 32; i++)
+        -: 3532:    {
+    #####: 3533:        for(j = 0; j < 32; j++)
+        -: 3534:        {
+    #####: 3535:            if(xorU32(Mat1.M[i] & Mat2_trans.M[j])) (*Mat).M[i] ^= idM32[j];
+        -: 3536:        }       
+        -: 3537:    } 
+    #####: 3538:}
+    #####: 3539:void MatMulMatM64(M64 Mat1, M64 Mat2, M64 *Mat)//matrix multiplication 64*64 mul 64*64 -> 64*64
+        -: 3540:{
+        -: 3541:    int i, j;
+        -: 3542:    M64 Mat2_trans;
+    #####: 3543:    initM64(Mat);
+    #####: 3544:    MattransM64(Mat2, &Mat2_trans);
+    #####: 3545:    for(i = 0; i < 64; i++)
+        -: 3546:    {
+    #####: 3547:        for(j = 0; j < 64; j++)
+        -: 3548:        {
+    #####: 3549:            if(xorU64(Mat1.M[i] & Mat2_trans.M[j])) (*Mat).M[i] ^= idM64[j];
+        -: 3550:        }       
+        -: 3551:    } 
+    #####: 3552:}
+    #####: 3553:void MatMulMatM128(M128 Mat1, M128 Mat2, M128 *Mat)//matrix multiplication 128*128 mul 128*128 -> 128*128
+        -: 3554:{
+        -: 3555:    int i, j;
+        -: 3556:    M128 Mat2_trans;
+        -: 3557:    uint64_t temp[2];
+    #####: 3558:    initM128(Mat);
+    #####: 3559:    MattransM128(Mat2, &Mat2_trans);
+    #####: 3560:    for(i = 0; i < 128; i++)
+        -: 3561:    {
+    #####: 3562:        for(j = 0; j < 64; j++)
+        -: 3563:        {
+    #####: 3564:            temp[0] = Mat1.M[i][0] & Mat2_trans.M[j][0];
+    #####: 3565:            temp[1] = Mat1.M[i][1] & Mat2_trans.M[j][1];
+    #####: 3566:            if(xorU128(temp)) (*Mat).M[i][0] ^= idM64[j];
+        -: 3567:        }
+    #####: 3568:        for(j = 64; j < 128; j++)
+        -: 3569:        {
+    #####: 3570:            temp[0] = Mat1.M[i][0] & Mat2_trans.M[j][0];
+    #####: 3571:            temp[1] = Mat1.M[i][1] & Mat2_trans.M[j][1];
+    #####: 3572:            if(xorU128(temp)) (*Mat).M[i][1] ^= idM64[j-64];
+        -: 3573:        }
+        -: 3574:    } 
+    #####: 3575:}
+    #####: 3576:void affinemixM4(Aff4 aff, Aff4 preaff_inv, Aff4 *mixaff)//mixed transformation of (previous affine inversion) and this round affine
+        -: 3577:{
+    #####: 3578:    MatMulMatM4(aff.Mat, preaff_inv.Mat, &(mixaff->Mat));
+    #####: 3579:    MatMulVecM4(aff.Mat, preaff_inv.Vec, &(mixaff->Vec));
+    #####: 3580:    (*mixaff).Vec.V ^= aff.Vec.V;
+    #####: 3581:}
+    #####: 3582:void affinemixM8(Aff8 aff, Aff8 preaff_inv, Aff8 *mixaff)//mixed transformation of (previous affine inversion) and this round affine
+        -: 3583:{
+    #####: 3584:    MatMulMatM8(aff.Mat, preaff_inv.Mat, &(mixaff->Mat));
+    #####: 3585:    MatMulVecM8(aff.Mat, preaff_inv.Vec, &(mixaff->Vec));
+    #####: 3586:    (*mixaff).Vec.V ^= aff.Vec.V;
+    #####: 3587:}
+    #####: 3588:void affinemixM16(Aff16 aff, Aff16 preaff_inv, Aff16 *mixaff)//mixed transformation of (previous affine inversion) and this round affine
+        -: 3589:{
+    #####: 3590:    MatMulMatM16(aff.Mat, preaff_inv.Mat, &(mixaff->Mat));
+    #####: 3591:    MatMulVecM16(aff.Mat, preaff_inv.Vec, &(mixaff->Vec));
+    #####: 3592:    (*mixaff).Vec.V ^= aff.Vec.V;
+    #####: 3593:}
+    #####: 3594:void affinemixM32(Aff32 aff, Aff32 preaff_inv, Aff32 *mixaff)//mixed transformation of (previous affine inversion) and this round affine
+        -: 3595:{
+    #####: 3596:    MatMulMatM32(aff.Mat, preaff_inv.Mat, &(mixaff->Mat));
+    #####: 3597:    MatMulVecM32(aff.Mat, preaff_inv.Vec, &(mixaff->Vec));
+    #####: 3598:    (*mixaff).Vec.V ^= aff.Vec.V;
+    #####: 3599:}
+    #####: 3600:void affinemixM64(Aff64 aff, Aff64 preaff_inv, Aff64 *mixaff)//mixed transformation of (previous affine inversion) and this round affine
+        -: 3601:{
+    #####: 3602:    MatMulMatM64(aff.Mat, preaff_inv.Mat, &(mixaff->Mat));
+    #####: 3603:    MatMulVecM64(aff.Mat, preaff_inv.Vec, &(mixaff->Vec));
+    #####: 3604:    (*mixaff).Vec.V ^= aff.Vec.V;
+    #####: 3605:}
+    #####: 3606:void affinemixM128(Aff128 aff, Aff128 preaff_inv, Aff128 *mixaff)//mixed transformation of (previous affine inversion) and this round affine
+        -: 3607:{
+    #####: 3608:    MatMulMatM128(aff.Mat, preaff_inv.Mat, &(mixaff->Mat));
+    #####: 3609:    MatMulVecM128(aff.Mat, preaff_inv.Vec, &(mixaff->Vec));
+    #####: 3610:    (*mixaff).Vec.V[0] ^= aff.Vec.V[0];
+    #####: 3611:    (*mixaff).Vec.V[1] ^= aff.Vec.V[1];
+    #####: 3612:}
