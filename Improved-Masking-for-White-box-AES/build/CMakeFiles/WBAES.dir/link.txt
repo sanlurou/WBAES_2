@@ -1,0 +1,3 @@
+D:\Microsoft_VS_Code\cmake-3.31.0-windows-x86_64\bin\cmake.exe -E rm -f CMakeFiles\WBAES.dir/objects.a
+D:\Microsoft_VS_Code\mingw64\bin\ar.exe qc CMakeFiles\WBAES.dir/objects.a @CMakeFiles\WBAES.dir\objects1.rsp
+D:\Microsoft_VS_Code\mingw64\bin\gcc.exe  -std=c99 -O2 -g -Wl,--whole-archive CMakeFiles\WBAES.dir/objects.a -Wl,--no-whole-archive -o WBAES.exe -Wl,--out-implib,libWBAES.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\WBAES.dir\linkLibs.rsp

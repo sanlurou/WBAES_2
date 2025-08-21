@@ -1,0 +1,32 @@
+[
+{
+  "directory": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/build",
+  "command": "D:\\Microsoft_VS_Code\\mingw64\\bin\\gcc.exe  @CMakeFiles/WBAES_LIB.dir/includes_C.rsp  -std=c99 -O2 -g -o CMakeFiles\\WBAES_LIB.dir\\src\\WBMatrix\\WBMatrix.c.obj -c G:\\codeC\\c_project\\Improved-Masking-for-White-box-AES\\src\\WBMatrix\\WBMatrix.c",
+  "file": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/src/WBMatrix/WBMatrix.c",
+  "output": "CMakeFiles/WBAES_LIB.dir/src/WBMatrix/WBMatrix.c.obj"
+},
+{
+  "directory": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/build",
+  "command": "D:\\Microsoft_VS_Code\\mingw64\\bin\\gcc.exe  @CMakeFiles/WBAES_LIB.dir/includes_C.rsp  -std=c99 -O2 -g -o CMakeFiles\\WBAES_LIB.dir\\src\\WBMatrix\\random.c.obj -c G:\\codeC\\c_project\\Improved-Masking-for-White-box-AES\\src\\WBMatrix\\random.c",
+  "file": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/src/WBMatrix/random.c",
+  "output": "CMakeFiles/WBAES_LIB.dir/src/WBMatrix/random.c.obj"
+},
+{
+  "directory": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/build",
+  "command": "D:\\Microsoft_VS_Code\\mingw64\\bin\\gcc.exe  @CMakeFiles/WBAES_LIB.dir/includes_C.rsp  -std=c99 -O2 -g -o CMakeFiles\\WBAES_LIB.dir\\src\\aes.c.obj -c G:\\codeC\\c_project\\Improved-Masking-for-White-box-AES\\src\\aes.c",
+  "file": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/src/aes.c",
+  "output": "CMakeFiles/WBAES_LIB.dir/src/aes.c.obj"
+},
+{
+  "directory": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/build",
+  "command": "D:\\Microsoft_VS_Code\\mingw64\\bin\\gcc.exe  @CMakeFiles/WBAES_LIB.dir/includes_C.rsp  -std=c99 -O2 -g -o CMakeFiles\\WBAES_LIB.dir\\src\\wbaes.c.obj -c G:\\codeC\\c_project\\Improved-Masking-for-White-box-AES\\src\\wbaes.c",
+  "file": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/src/wbaes.c",
+  "output": "CMakeFiles/WBAES_LIB.dir/src/wbaes.c.obj"
+},
+{
+  "directory": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/build",
+  "command": "D:\\Microsoft_VS_Code\\mingw64\\bin\\gcc.exe  @CMakeFiles/WBAES.dir/includes_C.rsp  -std=c99 -O2 -g -o CMakeFiles\\WBAES.dir\\test\\main.c.obj -c G:\\codeC\\c_project\\Improved-Masking-for-White-box-AES\\test\\main.c",
+  "file": "G:/codeC/c_project/Improved-Masking-for-White-box-AES/test/main.c",
+  "output": "CMakeFiles/WBAES.dir/test/main.c.obj"
+}
+]
