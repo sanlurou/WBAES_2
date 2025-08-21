@@ -1,0 +1,139 @@
+        -:    0:Source:/workspace/Improved-Masking-for-White-box-AES/src/aes.c
+        -:    1:#include "aes.h"
+        -:    2:u8 sbox[256];
+        2:    3:void initialize_aes_sbox(u8 sbox[256]) {
+        2:    4:  u8 p = 1, q = 1;
+        -:    5:  
+        -:    6:  /* loop invariant: p * q == 1 in the Galois field */
+        -:    7:  do {
+        -:    8:    /* multiply p by 3 */
+      510:    9:    p = p ^ (p << 1) ^ (p & 0x80 ? 0x1B : 0);
+        -:   10:
+        -:   11:    /* divide q by 3 (equals multiplication by 0xf6) */
+      510:   12:    q ^= q << 1;
+      510:   13:    q ^= q << 2;
+      510:   14:    q ^= q << 4;
+      510:   15:    q ^= q & 0x80 ? 0x09 : 0;
+        -:   16:
+        -:   17:    /* compute the affine transformation */
+      510:   18:    u8 xformed = q ^ ROTL8(q, 1) ^ ROTL8(q, 2) ^ ROTL8(q, 3) ^ ROTL8(q, 4);
+        -:   19:
+      510:   20:    sbox[p] = xformed ^ 0x63;
+      510:   21:  } while (p != 1);
+        -:   22:
+        -:   23:  /* 0 is a special case since it has no inverse */
+        2:   24:  sbox[0] = 0x63;
+        2:   25:}
+        -:   26:
+        4:   27:void printState (u8 in[16]) {
+       20:   28:  for(int i=0; i < 4; i++) {
+       16:   29:    printf("%.2X %.2X %.2X %.2X\n", in[i], in[i+4], in[i+8], in[i+12]);
+        -:   30:  }
+        4:   31:  printf("\n");
+        4:   32:}
+        -:   33:
+     4896:   34:void subBytes (u8 state[16]) {
+    83232:   35:  for (int i = 0; i < 16; i++)
+    78336:   36:    state[i] = SBox[state[i]];
+     4896:   37:}
+        -:   38:
+        -:   39:
+    43710:   40:void shiftRows (u8 state[16]) {
+        -:   41:  u8 out[16];
+    43710:   42:  int shiftTab[16] = {0, 5, 10, 15, 4, 9, 14, 3, 8, 13, 2, 7, 12, 1, 6, 11};
+   743070:   43:  for (int i = 0; i < 16; i++) {
+   699360:   44:    out[i] = state[shiftTab[i]];
+        -:   45:  }
+    43710:   46:  memcpy(state, out, sizeof(out));
+    43710:   47:}
+        -:   48:
+     4826:   49:void addRoundKey (u8 state[16], u8 roundKey[16]) {
+    82042:   50:  for (int i = 0; i < 16; i++)
+    77216:   51:    state[i] ^= roundKey[i];
+     4826:   52:}
+        -:   53:
+   712166:   54:u8 gMul (u8 a, u8 b) {
+   712166:   55:  u8 p = 0;
+        -:   56:  u8 hi_bit_set;
+        -:   57:
+  6409494:   58:  for (int i = 0; i < 8; i++) {
+  5697328:   59:    if ((b & 1) == 1)
+  2848078:   60:      p ^= a;
+  5697328:   61:    hi_bit_set = (a & 0x80);
+  5697328:   62:    a <<= 1;
+  5697328:   63:    if (hi_bit_set == 0x80)
+  1068296:   64:      a ^= 0x1b;
+  5697328:   65:    b >>= 1;
+        -:   66:  }
+   712166:   67:return p;
+        -:   68:}
+     3950:   69:void mixColumns (u8 state[16]) {
+        -:   70:  u8 out[16];
+    19750:   71:  for (int i = 0; i < 4; i++) {
+    15800:   72:    out[4*i] = gMul(2, state[4*i]) ^ gMul(3, state[4*i + 1]) ^ state[4*i + 2] ^ state[4*i + 3];
+    15800:   73:    out[4*i + 1] = state[4*i] ^ gMul(2, state[4*i + 1]) ^ gMul(3, state[4*i + 2]) ^ state[4*i + 3];
+    15800:   74:    out[4*i + 2] = state[4*i] ^ state[4*i + 1] ^ gMul(2, state[4*i + 2]) ^ gMul(3, state[4*i + 3]);
+    15800:   75:    out[4*i + 3] = gMul(3, state[4*i]) ^ state[4*i+1] ^ state[4*i + 2] ^ gMul(2, state[4*i + 3]);
+        -:   76:  }
+        -:   77:  
+     3950:   78:  memcpy(state, out, sizeof(out));
+     3950:   79:}
+        -:   80:
+      734:   81:void expandKey (u8 key[16], u8 expandedKey[176]) {
+        -:   82:  u8 tmp[4];
+      734:   83:  int i = 0;
+        -:   84:
+     3670:   85:  for (i = 0; i < 4; i++) {
+     2936:   86:    expandedKey[4*i] = key[4*i];
+     2936:   87:    expandedKey[4*i + 1] = key[4*i + 1];
+     2936:   88:    expandedKey[4*i + 2] = key[4*i + 2];
+     2936:   89:    expandedKey[4*i + 3] = key[4*i + 3];
+        -:   90:  }
+        -:   91:
+    30094:   92:  for (i = 4; i < 44; i++) {
+    29360:   93:    tmp[0] = expandedKey[4*(i-1)];
+    29360:   94:    tmp[1] = expandedKey[4*(i-1) + 1];
+    29360:   95:    tmp[2] = expandedKey[4*(i-1) + 2];
+    29360:   96:    tmp[3] = expandedKey[4*(i-1) + 3];
+        -:   97:
+    29360:   98:    if (i % 4 == 0) {
+     7340:   99:        int k = tmp[0];
+     7340:  100:        tmp[0] = SBox[tmp[1]] ^ rCon[i/4];
+     7340:  101:        tmp[1] = SBox[tmp[2]];
+     7340:  102:        tmp[2] = SBox[tmp[3]];
+     7340:  103:        tmp[3] = SBox[k];
+        -:  104:
+        -:  105:    }
+    29360:  106:    expandedKey[4*i] = expandedKey[4*(i-4)] ^ tmp[0];
+    29360:  107:    expandedKey[4*i + 1] = expandedKey[4*(i-4) + 1] ^ tmp[1];
+    29360:  108:    expandedKey[4*i + 2] = expandedKey[4*(i-4) + 2] ^ tmp[2];
+    29360:  109:    expandedKey[4*i + 3] = expandedKey[4*(i-4) + 3] ^ tmp[3];
+        -:  110:  }
+      734:  111:}
+        -:  112:
+        -:  113:
+      438:  114:void aes_128_encrypt (u8 input[16], u8 key[16], u8 output[16]) {
+        -:  115:  u8 expandedKey[176];
+        -:  116:
+      438:  117:  expandKey (key, expandedKey);
+        -:  118:
+     4380:  119:  for (int i = 0; i < 9; i++) {
+        -:  120:
+     3942:  121:    shiftRows (input); 
+     3942:  122:    shiftRows (expandedKey+16*i);
+     3942:  123:    addRoundKey (input, expandedKey + 16*i);
+     3942:  124:    subBytes (input);
+     3942:  125:    mixColumns (input);
+        -:  126:
+        -:  127:  }
+        -:  128:
+      438:  129:  shiftRows (input);
+      438:  130:  shiftRows (expandedKey + 144);
+      438:  131:  addRoundKey (input, expandedKey + 144);
+      438:  132:  subBytes (input);
+      438:  133:  addRoundKey (input, expandedKey + 160);
+        -:  134:
+     7446:  135:  for (int i = 0; i < 16; i++)
+     7008:  136:    output[i] = input[i];
+        -:  137:
+      438:  138:}

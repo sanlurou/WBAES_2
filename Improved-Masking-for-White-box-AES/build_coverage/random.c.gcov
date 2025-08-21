@@ -1,0 +1,26 @@
+        -:    0:Source:/workspace/Improved-Masking-for-White-box-AES/src/WBMatrix/random.c
+        -:    1:#include "WBMatrix/random.h"
+        -:    2://generate random permutation
+        -:    3:unsigned int m_index;
+        -:    4:unsigned int m_intermediateOffset;
+        -:    5:
+1206510050:    6:unsigned int permuteQPR(unsigned int x)
+        -:    7:{
+        -:    8:    static const unsigned int prime = 4294967291u;
+1206510050:    9:    if (x >= prime)
+        7:   10:        return x;
+1206510043:   11:    unsigned int residue = ((unsigned long long) x * x) % prime;
+1206510043:   12:    return (x <= prime / 2) ? residue : prime - residue;
+        -:   13:}
+        -:   14:
+   130712:   15:void InitRandom(unsigned int seedBase)
+        -:   16:{
+   130712:   17:    unsigned int seedOffset = seedBase+1;
+   130712:   18:    m_index = permuteQPR(permuteQPR(seedBase) + 0x682f0161);
+   130712:   19:    m_intermediateOffset = permuteQPR(permuteQPR(seedOffset) + 0x46790905);
+   130712:   20:}
+        -:   21:
+602993597:   22:unsigned int cus_random()
+        -:   23:{
+602993597:   24:    return permuteQPR((permuteQPR(m_index++) + m_intermediateOffset) ^ 0x5bf03635);
+        -:   25:}

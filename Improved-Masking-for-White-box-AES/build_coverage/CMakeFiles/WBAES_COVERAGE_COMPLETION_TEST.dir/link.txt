@@ -1,0 +1,1 @@
+/usr/bin/gcc  -std=c99 -O0 -g --coverage -fprofile-arcs -ftest-coverage -g  --coverage -rdynamic -Wl,--dependency-file=CMakeFiles/WBAES_COVERAGE_COMPLETION_TEST.dir/link.d CMakeFiles/WBAES_COVERAGE_COMPLETION_TEST.dir/test/coverage_completion_test.c.o -o WBAES_COVERAGE_COMPLETION_TEST  libWBAES_LIB.a
